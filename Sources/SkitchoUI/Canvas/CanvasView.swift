@@ -46,6 +46,9 @@ public final class CanvasView: NSView {
   public private(set) var zoom: Double = 1
   /// Called after every zoom change so the shell can show the zoom level.
   public var onZoomChange: ((Double) -> Void)?
+  /// Called before the canvas handles a mouse press or key, so the shell can end pending panel gestures
+  /// (a debounced custom color) before a canvas gesture opens its own.
+  public var willHandleInput: (() -> Void)?
 
   private var controllers: [Tool: any ToolController] = [:]
   private let selectController: SelectPanToolController
@@ -144,20 +147,27 @@ public final class CanvasView: NSView {
   /// Visible size of the enclosing scroll view, or nil when not hosted in one.
   private var viewportSize: CGSize? { enclosingScrollView?.contentSize }
 
+  /// Room kept below the canvas for the crop bar while it is shown, so the bar never covers the canvas edge
+  /// where the crop handles are.
+  var bottomReserve: CGFloat {
+    guard let cropBar else { return 0 }
+    return cropBar.fittingSize.height + Spacing.xs
+  }
+
   private func contentOrigin() -> CGPoint {
     let canvas = editor.document.canvasSize
     return CGPoint(
       x: max(Self.margin, (frame.width - canvas.width * zoom) / 2),
-      y: max(Self.margin, (frame.height - canvas.height * zoom) / 2))
+      y: max(Self.margin, (frame.height - bottomReserve - canvas.height * zoom) / 2))
   }
 
-  /// Resizes the view to the zoomed canvas plus margins (or the viewport, when larger).
+  /// Resizes the view to the zoomed canvas plus margins and the bar reserve (or the viewport, when larger).
   public func updateFrameSize() {
     let canvas = editor.document.canvasSize
     let viewport = viewportSize ?? .zero
     let size = CGSize(
       width: max(canvas.width * zoom + 2 * Self.margin, viewport.width),
-      height: max(canvas.height * zoom + 2 * Self.margin, viewport.height))
+      height: max(canvas.height * zoom + 2 * Self.margin + bottomReserve, viewport.height))
     if frame.size != size { setFrameSize(size) }
     layoutTextOverlay()
     layoutPixelateBar()
@@ -167,10 +177,23 @@ public final class CanvasView: NSView {
 
   // MARK: Zoom
 
-  public func setZoom(_ value: Double) {
+  /// Sets the zoom and keeps the document point under `anchor` (view coordinates) where it is on screen; the
+  /// anchor defaults to the center of the visible area.
+  public func setZoom(_ value: Double, anchor: CGPoint? = nil) {
+    let clip = enclosingScrollView?.contentView
+    let anchorView = anchor ?? clip.map { CGPoint(x: $0.bounds.midX, y: $0.bounds.midY) }
+    let anchorDocument = anchorView.map { documentPoint(fromView: $0) }
     zoom = min(max(value, Self.minZoom), Self.maxZoom)
     zoomBox.value = zoom
     updateFrameSize()
+    if let scrollView = enclosingScrollView, let clip, let anchorView, let anchorDocument {
+      // The clip view shares the canvas's (flipped) coordinates, so its origin moves with the anchor.
+      let moved = viewPoint(fromDocument: anchorDocument)
+      let origin = CGPoint(
+        x: clip.bounds.minX + moved.x - anchorView.x, y: clip.bounds.minY + moved.y - anchorView.y)
+      clip.scroll(to: clip.constrainBoundsRect(CGRect(origin: origin, size: clip.bounds.size)).origin)
+      scrollView.reflectScrolledClipView(clip)
+    }
     window?.invalidateCursorRects(for: self)
     onZoomChange?(zoom)
   }
@@ -185,12 +208,12 @@ public final class CanvasView: NSView {
     let canvas = editor.document.canvasSize
     guard canvas.width > 0, canvas.height > 0 else { return }
     let fitX = (size.width - 2 * Self.margin) / canvas.width
-    let fitY = (size.height - 2 * Self.margin) / canvas.height
+    let fitY = (size.height - 2 * Self.margin - bottomReserve) / canvas.height
     setZoom(min(fitX, fitY, 1))
   }
 
   public override func magnify(with event: NSEvent) {
-    setZoom(zoom * (1 + event.magnification))
+    setZoom(zoom * (1 + event.magnification), anchor: convert(event.locationInWindow, from: nil))
   }
 
   // MARK: Observation
@@ -280,6 +303,7 @@ public final class CanvasView: NSView {
     let bar = PixelateBar(
       blockSize: controller.blockSize,
       canApply: true,
+      errorMessage: controller.errorMessage,
       onBlockSize: { [weak controller] in controller?.blockSize = $0 },
       onApply: { [weak controller] in controller?.apply() },
       onCancel: { [weak controller] in controller?.cancel() })
@@ -312,8 +336,10 @@ public final class CanvasView: NSView {
   /// Shows, updates or removes the crop bar: it is present exactly while the crop tool is current.
   private func syncCropBar() {
     guard let controller = cropController, editor.currentTool == .crop else {
-      cropBar?.removeFromSuperview()
+      guard let bar = cropBar else { return }
+      bar.removeFromSuperview()
       cropBar = nil
+      updateFrameSize()
       return
     }
     let bar = CropBar(
@@ -331,7 +357,8 @@ public final class CanvasView: NSView {
       addSubview(hosting)
       cropBar = hosting
     }
-    layoutCropBar()
+    // The bar's height is reserved below the canvas (it grows with an error line).
+    updateFrameSize()
   }
 
   /// Centers the bar under the canvas (inside the view's bottom edge when there is no room below).
@@ -394,6 +421,7 @@ public final class CanvasView: NSView {
   }
 
   public override func mouseDown(with event: NSEvent) {
+    willHandleInput?()
     // A press on the canvas while text is being edited only ends the edit.
     if let textController, textController.isEditing {
       textController.commit()
@@ -439,6 +467,7 @@ public final class CanvasView: NSView {
   // MARK: Keyboard
 
   public override func keyDown(with event: NSEvent) {
+    willHandleInput?()
     let modifiers = ToolModifiers(event.modifierFlags)
     if event.keyCode == 49 && !event.isARepeat {  // Space: pan mode while held
       spaceDown = true

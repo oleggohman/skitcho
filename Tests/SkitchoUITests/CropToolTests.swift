@@ -97,6 +97,19 @@ import struct SkitchoCore.Document
     #expect(tool.rect.width == 1 && tool.rect.maxX == 200)
   }
 
+  /// With nothing cropped yet, a drag inside the canvas draws a new rectangle (the default cannot move).
+  @Test func firstDragInsideTheCanvasDrawsANewRect() {
+    let (editor, _) = makeEditor()
+    let tool = CropToolController(editor: editor, zoom: { 1 })
+    drag(tool, from: CGPoint(x: 50, y: 20), to: CGPoint(x: 120, y: 70))
+    #expect(tool.rect == CGRect(x: 50, y: 20, width: 70, height: 50))
+    #expect(tool.canApply)
+    // A click inside the full canvas creates nothing.
+    tool.cancel()
+    drag(tool, from: CGPoint(x: 50, y: 20), to: CGPoint(x: 50, y: 20))
+    #expect(!tool.hasPendingRect)
+  }
+
   @Test func moveKeepsTheSizeInsideTheCanvas() {
     let (editor, _) = makeEditor()
     let tool = CropToolController(editor: editor, zoom: { 1 })
@@ -294,6 +307,26 @@ import struct SkitchoCore.Document
     #expect(bar.height == 100)  // custom rect followed the content
     bar.onCancel()
     #expect(try #require(canvas.cropBar).rootView.width == 200)
+  }
+
+  /// The crop bar sits below the canvas, never over its bottom edge, also after Fit to window.
+  @Test func cropBarIsReservedBelowTheCanvas() throws {
+    let (editor, _) = makeEditor()
+    let (scrollView, canvas) = CanvasView.makeScrollView(editor: editor)
+    // Tight: the 100 px canvas plus margins fits at 100%, the bar below it does not.
+    scrollView.frame = CGRect(x: 0, y: 0, width: 600, height: 170)
+    canvas.editorDidChange()
+    let bar = try #require(canvas.cropBar)
+    #expect(canvas.bottomReserve >= bar.fittingSize.height)
+    canvas.zoomToFit()
+    let canvasRect = canvas.canvasGeometry.viewRect(canvasSize: editor.document.canvasSize)
+    #expect(bar.frame.minY >= canvasRect.maxY)
+    #expect(bar.frame.maxY <= canvas.bounds.maxY)
+    #expect(canvas.frame.height <= scrollView.contentSize.height + 0.5)
+
+    editor.currentTool = .select
+    canvas.editorDidChange()
+    #expect(canvas.bottomReserve == 0)
   }
 
   @Test func cropBarRenders() throws {

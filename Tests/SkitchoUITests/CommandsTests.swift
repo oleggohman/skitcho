@@ -446,6 +446,30 @@ import struct SkitchoCore.Document
     #expect(manager.canUndo)
   }
 
+  /// A canvas press within the debounce closes the color step first, so the drag gets its own undo step.
+  @Test func canvasPressFlushesThePendingColor() throws {
+    let editor = makeEditor()
+    let manager = editor.undoManager!
+    let model = PropertiesModel(editor: editor)
+    model.colorCommitDelay = .seconds(60)
+    let handle = CanvasHandle()
+    let canvas = CanvasView(editor: editor)
+    handle.attach(canvas)
+    handle.willHandleCanvasInput = { [weak model] in model?.finishCustomColor() }
+    model.setCustomColor(color(0.5))
+    #expect(editor.isInteracting)
+
+    let event = try #require(
+      NSEvent.mouseEvent(
+        with: .leftMouseDown, location: NSPoint(x: 1, y: 1), modifierFlags: [], timestamp: 0, windowNumber: 0,
+        context: nil, eventNumber: 0, clickCount: 1, pressure: 1))
+    manager.beginUndoGrouping()
+    canvas.mouseDown(with: event)
+    manager.endUndoGrouping()
+    #expect(!model.isColorSessionActive)
+    #expect(manager.undoActionName == "Change Color")
+  }
+
   @Test func pickerWithoutSelectionSetsTheNextColorWithoutUndo() {
     let editor = makeEditor()
     editor.deselect()

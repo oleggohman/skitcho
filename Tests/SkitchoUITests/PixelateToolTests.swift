@@ -201,6 +201,14 @@ import struct SkitchoCore.Document
     #expect(canvas.pixelateBar == nil)
   }
 
+  @Test func pixelateBarShowsTheApplyError() {
+    let plain = PixelateBar(blockSize: 8, canApply: true, onBlockSize: { _ in }, onApply: {}, onCancel: {})
+    let failed = PixelateBar(
+      blockSize: 8, canApply: true, errorMessage: "Could not pixelate", onBlockSize: { _ in }, onApply: {},
+      onCancel: {})
+    #expect(NSHostingView(rootView: failed).fittingSize.height > NSHostingView(rootView: plain).fittingSize.height)
+  }
+
   @Test func leavingTheToolDiscardsThePendingRegion() throws {
     let (editor, _) = makeEditor()
     let canvas = CanvasView(editor: editor)

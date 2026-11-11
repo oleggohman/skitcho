@@ -90,6 +90,52 @@ import struct SkitchoCore.Document
     #expect(canvas.zoom == 1)
   }
 
+  /// A scroll view of `viewport` hosting a canvas for a large document, laid out like the window does.
+  private func scrolledCanvas(viewport: CGSize = CGSize(width: 400, height: 300)) -> (NSScrollView, CanvasView) {
+    let editor = EditorModel(document: Document.blank(size: CGSize(width: 2000, height: 1500)), undoManager: nil)
+    let (scrollView, canvas) = CanvasView.makeScrollView(editor: editor)
+    scrollView.hasVerticalScroller = false
+    scrollView.hasHorizontalScroller = false
+    scrollView.frame = CGRect(origin: .zero, size: viewport)
+    canvas.setZoom(1)
+    return (scrollView, canvas)
+  }
+
+  private func scroll(_ scrollView: NSScrollView, to origin: CGPoint) {
+    scrollView.contentView.scroll(to: origin)
+    scrollView.reflectScrolledClipView(scrollView.contentView)
+  }
+
+  private func near(_ a: CGPoint, _ b: CGPoint, _ tolerance: Double = 1) -> Bool {
+    abs(a.x - b.x) <= tolerance && abs(a.y - b.y) <= tolerance
+  }
+
+  /// Zoom buttons keep the document point at the viewport center in place.
+  @Test func zoomButtonsKeepTheViewportCenter() {
+    let (scrollView, canvas) = scrolledCanvas()
+    scroll(scrollView, to: CGPoint(x: 500, y: 400))
+    let clip = scrollView.contentView
+    let center = { canvas.documentPoint(fromView: CGPoint(x: clip.bounds.midX, y: clip.bounds.midY)) }
+    let before = center()
+    canvas.zoomIn()
+    #expect(near(center(), before))
+    canvas.zoomOut()
+    canvas.zoomOut()
+    #expect(near(center(), before))
+  }
+
+  /// A pinch keeps the document point under the pointer in place.
+  @Test func pinchZoomKeepsThePointUnderThePointer() {
+    let (scrollView, canvas) = scrolledCanvas()
+    scroll(scrollView, to: CGPoint(x: 600, y: 300))
+    let clip = scrollView.contentView
+    let pointer = CGPoint(x: clip.bounds.minX + 50, y: clip.bounds.minY + 60)
+    let under = canvas.documentPoint(fromView: pointer)
+    canvas.setZoom(2, anchor: pointer)
+    let after = canvas.viewPoint(fromDocument: under)
+    #expect(near(CGPoint(x: after.x - clip.bounds.minX, y: after.y - clip.bounds.minY), CGPoint(x: 50, y: 60)))
+  }
+
   @Test func canvasSizeChangeResizesFrame() {
     let (editor, _) = makeEditor()
     let canvas = CanvasView(editor: editor)

@@ -8,6 +8,8 @@ import SwiftUI
 public final class CanvasHandle {
   public private(set) var zoom: Double = 1
   public private(set) weak var canvas: CanvasView?
+  /// Runs before the canvas handles a mouse press or key (the window ends pending panel gestures here).
+  public var willHandleCanvasInput: (() -> Void)?
 
   public init() {}
 
@@ -15,6 +17,7 @@ public final class CanvasHandle {
     self.canvas = canvas
     zoom = canvas.zoom
     canvas.onZoomChange = { [weak self] value in self?.zoom = value }
+    canvas.willHandleInput = { [weak self] in self?.willHandleCanvasInput?() }
   }
 
   public func zoomIn() { canvas?.zoomIn() }
@@ -115,7 +118,12 @@ public struct EditorWindowView: View {
     }
     // The command model presents resize and export itself: closures stored on it must not capture this view,
     // whose state storage owns the model (a retain cycle that would keep the closed window's editor alive).
-    .onAppear { Self.bind(editor, to: undoManager) }
+    .onAppear {
+      Self.bind(editor, to: undoManager)
+      // A canvas gesture must not share the interactive slot with a pending custom color change.
+      let properties = properties
+      handle.willHandleCanvasInput = { [weak properties] in properties?.finishCustomColor() }
+    }
     .onChange(of: undoManager) { _, new in Self.bind(editor, to: new) }
   }
 

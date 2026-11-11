@@ -3,8 +3,9 @@ import CoreGraphics
 import Foundation
 import SkitchoCore
 
-/// The C tool: a crop rectangle over the whole canvas (resize it by its handles, move it, or drag a new one),
-/// with a rule-of-thirds grid, a dim outside and W×H fields kept in sync through `width`/`height`. Nothing
+/// The C tool: a crop rectangle over the whole canvas (resize it by its handles, move it, or drag a new one;
+/// while it still covers the whole canvas a drag inside it draws a new one), with a rule-of-thirds grid, a dim
+/// outside and W×H fields kept in sync through `width`/`height`. Nothing
 /// touches the document until Apply (Return), which runs `EditorModel.crop` once ("Crop Image" undo step).
 /// `expand(_:)` grows the canvas by `expandAmount` on one edge ("Expand Canvas" undo step); the crop rect
 /// follows so it keeps framing the same content. Leaving the tool discards the rectangle.
@@ -178,7 +179,8 @@ public final class CropToolController: ToolController {
     let current = rect
     if let handle = handle(at: point) {
       drag = .resize(handle, original: current)
-    } else if current.contains(point) {
+    } else if customRect != nil, current.contains(point) {
+      // Only a user rectangle moves; the full-canvas default cannot, so a drag on it draws a new one.
       drag = .move(start: point, original: current)
     } else {
       drag = .create(origin: clamped(point))
