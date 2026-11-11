@@ -290,6 +290,41 @@ private func samePixels(_ a: CGImage, _ b: CGImage) -> Bool {
     expectPoint(arrowPoints(vertical.elements[0]).0, 1, 3)
   }
 
+  @Test func singleFlipMirrorsRotationTailAndCenterOfEveryBoxKind() throws {
+    let elements = [
+      Element(
+        kind: .rect(CGRect(x: 2, y: 1, width: 6, height: 3), rounded: true), style: testStyle(.red), rotation: 0.3),
+      Element(kind: .ellipse(CGRect(x: 10, y: 2, width: 4, height: 6)), style: testStyle(.red), rotation: -0.4),
+      Element(
+        kind: .text(TextContent(string: "Hi", origin: CGPoint(x: 3, y: 5))), style: testStyle(.red), rotation: 0.5),
+      Element(
+        kind: .stamp(.question, center: CGPoint(x: 14, y: 6), tailAngle: 0.7, labelID: nil),
+        style: testStyle(.red, stroke: 0.3), rotation: 0.2),
+    ]
+    let (width, height) = (20.0, 10.0)
+    let document = gradientDocument(width: 20, height: 10, elements: elements)
+    for axis in [FlipAxis.horizontal, .vertical] {
+      let flipped = try ImageOps.flip(document, axis: axis).elements
+      for (old, new) in zip(elements, flipped) {
+        #expect(abs(new.rotation + old.rotation) < 1e-9, "\(axis) rotation \(new.rotation) vs \(-old.rotation)")
+        let c = old.baseBounds.center
+        let mapped = axis == .horizontal ? CGPoint(x: width - c.x, y: c.y) : CGPoint(x: c.x, y: height - c.y)
+        expectPoint(new.baseBounds.center, mapped.x, mapped.y)
+        // Boxes are moved, never mirrored or resized.
+        #expect(abs(new.baseBounds.width - old.baseBounds.width) < 1e-9)
+        #expect(abs(new.baseBounds.height - old.baseBounds.height) < 1e-9)
+      }
+      guard case .stamp(_, _, let tail?, _) = flipped[3].kind else {
+        Issue.record("stamp lost its tail")
+        continue
+      }
+      let expectedTail = axis == .horizontal ? Double.pi - 0.7 : -0.7
+      #expect(abs(tail - expectedTail) < 1e-9, "\(axis) tail \(tail) vs \(expectedTail)")
+      guard case .text(let content) = flipped[2].kind else { fatalError("expected text") }
+      #expect(content.string == "Hi")
+    }
+  }
+
   @Test func rotateAndFlipLeaveStylesUnchanged() throws {
     let arrow = arrowElement(CGPoint(x: 1, y: 1), CGPoint(x: 3, y: 1), stroke: 9)
     let document = gradientDocument(elements: [arrow])
