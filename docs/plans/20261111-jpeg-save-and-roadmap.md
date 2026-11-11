@@ -151,16 +151,16 @@ The maintainer is away and asked for autonomous execution. Decisions not settled
 - Modify: `Tests/SkitchoUITests/ShapeToolTests.swift` (+ `HandleTests.swift` if affected)
 - Delete: `docs/backlog/arrow-head-at-press-point.md`
 
-- [ ] the arrow tool builds `.arrow(start: dragPoint, end: pressPoint)`; `.line` unchanged; Shift snap and minimum length pivot on the press point; Option rule as in Technical Details
-- [ ] write tests:
+- [x] the arrow tool builds `.arrow(start: dragPoint, end: pressPoint)`; `.line` unchanged; Shift snap and minimum length pivot on the press point; Option rule as in Technical Details
+- [x] write tests:
   - drag P→Q gives `end == P` and `start == Q`
   - the Shift snap angle is measured at P
   - a too-short drag is still a no-op
   - Option-from-center places the head opposite the drag
   - the double-headed toggle still works
   - handle drag on the head end moves `end`
-- [ ] `git rm docs/backlog/arrow-head-at-press-point.md` in this task's commit
-- [ ] run tests — must pass before task 2
+- [x] `git rm docs/backlog/arrow-head-at-press-point.md` in this task's commit
+- [x] run tests — must pass before task 2
 
 ### Task 2: Bold outlined arrow
 

@@ -47,7 +47,7 @@ public final class ShapeToolController: ToolController {
   // MARK: Geometry
 
   /// The element kind for a drag from `start` to `end`, with Shift (square/circle/15 degrees) and Option
-  /// (start is the center) applied. Pure, so tests can call it directly.
+  /// (start is the center) applied. Arrows are built head-first at the press point. Pure, so tests can call it directly.
   static func kind(
     for tool: Tool, from start: CGPoint, to end: CGPoint, modifiers: ToolModifiers, doubleHeaded: Bool = false
   ) -> ElementKind {
@@ -60,7 +60,9 @@ public final class ShapeToolController: ToolController {
       }
       let from = modifiers.contains(.option) ? CGPoint(x: start.x - delta.x, y: start.y - delta.y) : start
       let to = CGPoint(x: start.x + delta.x, y: start.y + delta.y)
-      return tool == .arrow ? .arrow(start: from, end: to, doubleHeaded: doubleHeaded) : .line(start: from, end: to)
+      // The press point is the thing being pointed at: the arrow's head (`end`) goes there and the tail follows
+      // the drag. With Option the press point is the center, so the head lands opposite the drag direction.
+      return tool == .arrow ? .arrow(start: to, end: from, doubleHeaded: doubleHeaded) : .line(start: from, end: to)
     default:
       var dx = end.x - start.x
       var dy = end.y - start.y

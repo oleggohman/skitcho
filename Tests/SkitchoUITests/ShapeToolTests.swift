@@ -94,7 +94,50 @@ import struct SkitchoCore.Document
       Issue.record("expected arrow")
       return
     }
-    #expect(start == CGPoint(x: 50, y: 50) && end == CGPoint(x: 450, y: 50) && double)
+    // The head (`end`) sits at the press point; the tail (`start`) follows the drag.
+    #expect(end == CGPoint(x: 50, y: 50) && start == CGPoint(x: 450, y: 50) && double)
+  }
+
+  @Test func arrowShiftSnapIsMeasuredFromPressPoint() {
+    let press = CGPoint(x: 100, y: 100)
+    let drag = CGPoint(x: 100 + 200 * cos(10 * Double.pi / 180), y: 100 + 200 * sin(10 * Double.pi / 180))
+    guard
+      case .arrow(let start, let end, _) = ShapeToolController.kind(
+        for: .arrow, from: press, to: drag, modifiers: .shift)
+    else {
+      Issue.record("expected arrow")
+      return
+    }
+    #expect(end == press)
+    let angle = atan2(start.y - end.y, start.x - end.x) * 180 / .pi
+    #expect(abs(angle - 15) < 1e-6)
+  }
+
+  @Test func arrowOptionPutsHeadOppositeTheDrag() {
+    let press = CGPoint(x: 200, y: 200)
+    guard
+      case .arrow(let start, let end, _) = ShapeToolController.kind(
+        for: .arrow, from: press, to: CGPoint(x: 260, y: 200), modifiers: .option)
+    else {
+      Issue.record("expected arrow")
+      return
+    }
+    #expect(near(start, CGPoint(x: 260, y: 200)) && near(end, CGPoint(x: 140, y: 200)))
+  }
+
+  @Test func arrowHeadHandleDragMovesEnd() throws {
+    let (editor, manager) = makeEditor()
+    let tool = controller(editor, .arrow)
+    drag(tool, manager, from: CGPoint(x: 50, y: 50), to: CGPoint(x: 450, y: 50))
+    let element = editor.document.elements[0]
+    let head = try #require(HandleLayout.position(of: .end, on: element, zoom: 1))
+    #expect(near(head, CGPoint(x: 50, y: 50)))
+    drag(tool, manager, from: head, to: CGPoint(x: 50, y: 150))
+    guard case .arrow(let start, let end, _) = editor.document.elements[0].kind else {
+      Issue.record("expected arrow")
+      return
+    }
+    #expect(near(start, CGPoint(x: 450, y: 50)) && near(end, CGPoint(x: 50, y: 150)))
   }
 
   @Test func shiftMakesSquareAndCircle() {
