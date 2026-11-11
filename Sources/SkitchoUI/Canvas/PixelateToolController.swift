@@ -67,7 +67,7 @@ public final class PixelateToolController: ToolController {
     do {
       try editor.pixelate(rect: rect, blockSize: blockSize)
     } catch {
-      errorMessage = "Could not pixelate: \(error)"
+      errorMessage = "Could not pixelate: \(error.localizedDescription)"
       stateDidChange?()
       return false
     }

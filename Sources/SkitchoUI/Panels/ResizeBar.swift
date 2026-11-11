@@ -148,10 +148,7 @@ public final class ResizeModel {
   }
 
   private static func text(for error: Error, action: String) -> String {
-    if let error = error as? ImageOpError, error == .tooLarge {
-      return "Could not \(action): the image would be larger than \(ImageOps.maxSide) px."
-    }
-    return "Could not \(action): \(error)"
+    "Could not \(action): \(error.localizedDescription)"
   }
 }
 

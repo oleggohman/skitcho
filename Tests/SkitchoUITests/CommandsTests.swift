@@ -245,6 +245,17 @@ import struct SkitchoCore.Document
     #expect(model.resizeModel == nil)
   }
 
+  /// Core errors reach the user as sentences, not type names.
+  @Test func imageOperationErrorsAreReadable() {
+    #expect(ImageImportError.tooLarge.localizedDescription.contains("\(ImageOps.maxSide)"))
+    #expect(RenderError.invalidSize.localizedDescription == "The image is too large to render.")
+    let editor = EditorModel(
+      document: Document.blank(size: CGSize(width: ImageOps.maxSide, height: 4)), undoManager: nil)
+    let model = EditorCommandModel(editor: editor, handle: CanvasHandle())
+    #expect(!model.expandCanvas(.right))
+    #expect(model.errorMessage == "The image would be larger than \(ImageOps.maxSide) pixels per side.")
+  }
+
   @Test func copyImageWritesPNGAndTIFF() {
     let pasteboard = privatePasteboard()
     defer { pasteboard.releaseGlobally() }

@@ -100,7 +100,7 @@ public final class CropToolController: ToolController {
     do {
       try editor.crop(to: rect)
     } catch {
-      errorMessage = "Could not crop: \(error)"
+      errorMessage = "Could not crop: \(error.localizedDescription)"
       stateDidChange?()
       return false
     }
@@ -127,7 +127,7 @@ public final class CropToolController: ToolController {
     do {
       try editor.expandCanvas(edge: edge, amount: Self.expandAmount)
     } catch {
-      errorMessage = "Could not expand: \(error)"
+      errorMessage = "Could not expand: \(error.localizedDescription)"
       stateDidChange?()
       return
     }

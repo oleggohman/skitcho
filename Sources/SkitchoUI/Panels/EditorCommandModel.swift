@@ -138,7 +138,7 @@ public final class EditorCommandModel {
       errorMessage = nil
       return true
     } catch {
-      errorMessage = "\(error)"
+      errorMessage = error.localizedDescription
       return false
     }
   }
