@@ -116,6 +116,29 @@ private final class LockedBox<T>: @unchecked Sendable {
     #expect(source.filePromiseProvider(provider, fileNameForType: "public.png") == "Notes.png")
   }
 
+  /// AppKit may call the name and queue callbacks off the main thread; they must not trap there, and the name
+  /// is the one taken when the drag started.
+  @Test func promiseCallbacksWorkOffTheMainThread() async {
+    var name = "Before.skitcho"
+    let source = DragOutSource(
+      document: { Document.blank(size: CGSize(width: 4, height: 3)) }, documentName: { name })
+    nonisolated(unsafe) let provider = source.makeProvider()
+    name = "Renamed.skitcho"
+    let (fileName, hasQueue, onMain) = await withCheckedContinuation { continuation in
+      DispatchQueue.global().async {
+        continuation.resume(
+          returning: (
+            source.filePromiseProvider(provider, fileNameForType: "public.png"),
+            source.operationQueue(for: provider).qualityOfService == .userInitiated,
+            Thread.isMainThread
+          ))
+      }
+    }
+    #expect(!onMain)
+    #expect(fileName == "Before.png")
+    #expect(hasQueue)
+  }
+
   @Test func promiseWriterProducesDecodablePng() throws {
     let editor = EditorModel(document: Document.blank(size: CGSize(width: 40, height: 30)), undoManager: nil)
     let source = DragOutSource(document: { editor.document }, documentName: { nil })

@@ -9,15 +9,22 @@ import struct SkitchoCore.Document
 /// drag where to write, so nothing is rendered until the drop.
 @MainActor
 public final class DragOutSource: NSObject, NSFilePromiseProviderDelegate {
-  public static let fallbackName = "Skitcho"
+  public nonisolated static let fallbackName = "Skitcho"
 
   private let document: () -> Document
   private let documentName: () -> String?
-  private let queue: OperationQueue = {
+  /// AppKit may ask for the queue off the main thread, so it is nonisolated and immutable.
+  private nonisolated let queue: OperationQueue = {
     let queue = OperationQueue()
     queue.qualityOfService = .userInitiated
     return queue
   }()
+
+  /// What a provider carries: the document and the file name, both taken when the drag starts.
+  struct Promise: Sendable {
+    let document: Document
+    let fileName: String
+  }
 
   public init(document: @escaping () -> Document, documentName: @escaping () -> String?) {
     self.document = document
@@ -33,10 +40,11 @@ public final class DragOutSource: NSObject, NSFilePromiseProviderDelegate {
     return base + ".png"
   }
 
-  /// A provider that carries a snapshot of the document taken now.
+  /// A provider that carries a snapshot of the document and its file name, taken now. The delegate callbacks
+  /// may run off the main thread, so they read only this snapshot.
   public func makeProvider() -> NSFilePromiseProvider {
     let provider = NSFilePromiseProvider(fileType: UTType.png.identifier, delegate: self)
-    provider.userInfo = document()
+    provider.userInfo = Promise(document: document(), fileName: Self.fileName(forDocumentName: documentName()))
     return provider
   }
 
@@ -51,19 +59,19 @@ public final class DragOutSource: NSObject, NSFilePromiseProviderDelegate {
   public nonisolated func filePromiseProvider(
     _ filePromiseProvider: NSFilePromiseProvider, fileNameForType fileType: String
   ) -> String {
-    MainActor.assumeIsolated { Self.fileName(forDocumentName: documentName()) }
+    (filePromiseProvider.userInfo as? Promise)?.fileName ?? Self.fallbackName + ".png"
   }
 
   public nonisolated func filePromiseProvider(
     _ filePromiseProvider: NSFilePromiseProvider, writePromiseTo url: URL,
     completionHandler: @escaping @Sendable (Error?) -> Void
   ) {
-    guard let document = filePromiseProvider.userInfo as? Document else {
+    guard let promise = filePromiseProvider.userInfo as? Promise else {
       completionHandler(ExportError.encodingFailed)
       return
     }
     do {
-      try Self.write(document, to: url)
+      try Self.write(promise.document, to: url)
       completionHandler(nil)
     } catch {
       completionHandler(error)
@@ -71,7 +79,7 @@ public final class DragOutSource: NSObject, NSFilePromiseProviderDelegate {
   }
 
   public nonisolated func operationQueue(for filePromiseProvider: NSFilePromiseProvider) -> OperationQueue {
-    MainActor.assumeIsolated { queue }
+    queue
   }
 }
 
