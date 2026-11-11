@@ -13,56 +13,141 @@ fail() {
 if [[ "${1:-}" == "--release-dry-run" ]]; then
   # Throwaway ed25519 key that never touches the Keychain or Sparkle's generate_keys.
   WORK="$(mktemp -d)"
-  trap 'rm -rf "$WORK"' EXIT
+  MNT="$WORK/mnt"
+  MOUNTED=0
+  cleanup() {
+    # Always detach the image before removing the mount point.
+    if [[ "$MOUNTED" == 1 ]]; then
+      hdiutil detach -quiet "$MNT" || hdiutil detach -quiet -force "$MNT" || true
+    fi
+    rm -rf "$WORK"
+  }
+  trap cleanup EXIT
   OPENSSL="$(brew --prefix openssl@3 2>/dev/null || true)/bin/openssl"
   [[ -x "$OPENSSL" ]] || OPENSSL=openssl # /usr/bin/openssl is LibreSSL and may lack ed25519
   "$OPENSSL" genpkey -algorithm ed25519 -out "$WORK/key.pem" 2>/dev/null ||
     fail "$OPENSSL cannot generate ed25519 keys (install openssl@3: brew install openssl@3)"
   "$OPENSSL" pkey -in "$WORK/key.pem" -outform DER | tail -c 32 | base64 >"$WORK/seed"
   PUB="$("$OPENSSL" pkey -in "$WORK/key.pem" -pubout -outform DER | tail -c 32 | base64)"
+  "$OPENSSL" genpkey -algorithm ed25519 -out "$WORK/other.pem" 2>/dev/null
+  OTHER_PUB="$("$OPENSSL" pkey -in "$WORK/other.pem" -pubout -outform DER | tail -c 32 | base64)"
 
   DRY_VERSION="9.9.9"
+  # Hermetic feed: a fixture stands in for the published appcast (never the production URL).
+  fixture() { # $1 = sparkle:version, $2 = shortVersionString; prints a file:// URL
+    cat >"$WORK/appcast-$1-$2.xml" <<XML
+<?xml version="1.0" encoding="utf-8"?>
+<rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle">
+  <channel>
+    <title>Skitcho</title>
+    <item>
+      <title>$2</title>
+      <pubDate>Mon, 01 Jan 2024 00:00:00 +0000</pubDate>
+      <sparkle:version>$1</sparkle:version>
+      <sparkle:shortVersionString>$2</sparkle:shortVersionString>
+      <sparkle:minimumSystemVersion>15.0</sparkle:minimumSystemVersion>
+      <enclosure url="https://github.com/oleggohman/skitcho/releases/download/v$2/Skitcho-$2.dmg" length="1" type="application/octet-stream" sparkle:edSignature="AAAA"/>
+    </item>
+  </channel>
+</rss>
+XML
+    echo "file://$WORK/appcast-$1-$2.xml"
+  }
+  run_release() { # $1 = public key, $2 = appcast URL; output goes to $WORK/release.log
+    SPARKLE_ED_PRIVATE_KEY="$(cat "$WORK/seed")" SPARKLE_PUBLIC_ED_KEY="$1" SIGN_IDENTITY="" APPCAST_URL="$2" \
+      "$ROOT/scripts/release.sh" "$DRY_VERSION" --dry-run >"$WORK/release.log" 2>&1
+  }
+  expect_reject() { # $1 = label, $2 = expected error text, rest = run_release args
+    local label="$1" want="$2"
+    shift 2
+    if run_release "$@"; then
+      fail "release.sh accepted $label"
+    fi
+    grep -qF "$want" "$WORK/release.log" || {
+      cat "$WORK/release.log" >&2
+      fail "$label: missing '$want'"
+    }
+    if grep -q 'bundle ok' "$WORK/release.log"; then
+      fail "$label was rejected only after building"
+    fi
+    echo "ok: preflight rejects $label"
+  }
+  OLD_FEED="$(fixture 1 0.0.1)"
+  expect_reject "an empty public key" "SPARKLE_PUBLIC_ED_KEY must be" "" "$OLD_FEED"
+  expect_reject "a mismatched public key" "does not match SPARKLE_ED_PRIVATE_KEY" "$OTHER_PUB" "$OLD_FEED"
+  expect_reject "a build number not above the feed" "is not greater than published sparkle:version" \
+    "$PUB" "$(fixture 999999 0.0.1)"
+  expect_reject "a version not above the feed" "is not greater than published version" \
+    "$PUB" "$(fixture 1 10.0.0)"
+  expect_reject "an unreadable feed" "cannot read" "$PUB" "file://$WORK/missing.xml"
+
   rm -rf "$ROOT/dist"
-  SPARKLE_ED_PRIVATE_KEY="$(cat "$WORK/seed")" SPARKLE_PUBLIC_ED_KEY="$PUB" SIGN_IDENTITY="" \
-    "$ROOT/scripts/release.sh" "$DRY_VERSION" --dry-run || fail "release.sh --dry-run failed"
+  if ! run_release "$PUB" "$OLD_FEED"; then
+    cat "$WORK/release.log" >&2
+    fail "release.sh --dry-run failed"
+  fi
+  tail -n 2 "$WORK/release.log"
 
-  ZIP="$ROOT/dist/Skitcho-$DRY_VERSION.zip"
+  DMG="$ROOT/dist/Skitcho-$DRY_VERSION.dmg"
   APPCAST="$ROOT/dist/appcast.xml"
-  [[ -f "$ZIP" ]] || fail "missing $ZIP"
+  [[ -f "$DMG" ]] || fail "missing $DMG"
   [[ -f "$APPCAST" ]] || fail "missing appcast.xml"
+  extra="$(find "$ROOT/dist" -mindepth 1 ! -name "Skitcho-$DRY_VERSION.dmg" ! -name appcast.xml -print)"
+  [[ -z "$extra" ]] || fail "unexpected files in dist: $extra"
+  hdiutil imageinfo "$DMG" 2>/dev/null | grep -q 'Format: UDZO' || fail "dmg: not a UDZO image"
+  echo "ok: dmg is UDZO"
 
-  # The zip holds an arm64-only app.
-  UNZIP="$WORK/unzip"
-  mkdir -p "$UNZIP"
-  ditto -x -k "$ZIP" "$UNZIP"
-  zmacho=0
+  # The DMG mounts read-only and holds an arm64-only, validly signed app plus the Applications link.
+  mkdir -p "$MNT"
+  MOUNTED=1 # set first: a partly failed attach is still detached by cleanup
+  hdiutil attach -quiet -nobrowse -readonly -mountpoint "$MNT" "$DMG" || fail "dmg: hdiutil attach failed"
+  vol="$(diskutil info "$MNT" | awk -F': *' '/Volume Name/{print $2}')"
+  [[ "$vol" == "Skitcho" ]] || fail "dmg: volume name '$vol', expected 'Skitcho'"
+  echo "ok: dmg volume name Skitcho"
+  [[ -d "$MNT/Skitcho.app" ]] || fail "dmg: Skitcho.app missing"
+  echo "ok: dmg contains Skitcho.app"
+  [[ -L "$MNT/Applications" && "$(readlink "$MNT/Applications")" == "/Applications" ]] ||
+    fail "dmg: Applications symlink missing or wrong"
+  echo "ok: dmg Applications -> /Applications"
+  dmacho=0
   while IFS= read -r -d '' f; do
     if file -b "$f" | grep -q 'Mach-O'; then
-      [[ "$(lipo -archs "$f")" == "arm64" ]] || fail "zip: $f is not thin arm64"
-      zmacho=$((zmacho + 1))
+      [[ "$(lipo -archs "$f")" == "arm64" ]] || fail "dmg: $f is not thin arm64"
+      dmacho=$((dmacho + 1))
     fi
-  done < <(find "$UNZIP/Skitcho.app" -type f -print0)
-  [[ "$zmacho" -ge 1 ]] || fail "zip: no Mach-O found"
-  codesign --verify --deep --strict "$UNZIP/Skitcho.app" || fail "zip: codesign verification failed"
-  zpub="$(/usr/libexec/PlistBuddy -c 'Print :SUPublicEDKey' "$UNZIP/Skitcho.app/Contents/Info.plist")"
-  [[ "$zpub" == "$PUB" ]] || fail "zip: SUPublicEDKey does not match the dry-run key"
+  done < <(find "$MNT/Skitcho.app" -type f -print0)
+  [[ "$dmacho" -ge 1 ]] || fail "dmg: no Mach-O found"
+  echo "ok: dmg has $dmacho Mach-O, all thin arm64"
+  codesign --verify --deep --strict "$MNT/Skitcho.app" || fail "dmg: codesign verification failed"
+  echo "ok: dmg app passes codesign --verify --deep --strict"
+  dpub="$(/usr/libexec/PlistBuddy -c 'Print :SUPublicEDKey' "$MNT/Skitcho.app/Contents/Info.plist")"
+  [[ "$dpub" == "$PUB" ]] || fail "dmg: SUPublicEDKey does not match the dry-run key"
+  echo "ok: dmg SUPublicEDKey matches the dry-run key"
+  hdiutil detach -quiet "$MNT" || fail "dmg: hdiutil detach failed"
+  MOUNTED=0
 
-  # appcast.xml parses, carries an edSignature and the right enclosure URL.
+  # appcast.xml parses, keeps the fixture item, and its new item has an edSignature and the DMG URL.
   xmllint --noout "$APPCAST" || fail "appcast.xml does not parse"
-  want_url="https://github.com/oleggohman/skitcho/releases/download/v$DRY_VERSION/Skitcho-$DRY_VERSION.zip"
-  got_url="$(xmllint --xpath 'string(//*[local-name()="enclosure"]/@url)' "$APPCAST")"
+  items="$(xmllint --xpath 'count(//item)' "$APPCAST")"
+  [[ "$items" == "2" ]] || fail "appcast.xml has $items items, expected 2 (fixture merged)"
+  item="//item[*[local-name()='shortVersionString']='$DRY_VERSION']/*[local-name()='enclosure']"
+  want_url="https://github.com/oleggohman/skitcho/releases/download/v$DRY_VERSION/Skitcho-$DRY_VERSION.dmg"
+  got_url="$(xmllint --xpath "string($item/@url)" "$APPCAST")"
   [[ "$got_url" == "$want_url" ]] || fail "enclosure url '$got_url', expected '$want_url'"
-  SIG="$(xmllint --xpath 'string(//*[local-name()="enclosure"]/@*[local-name()="edSignature"])' "$APPCAST")"
+  [[ "$got_url" == *.dmg ]] || fail "enclosure url does not end in .dmg"
+  echo "ok: appcast enclosure $got_url"
+  SIG="$(xmllint --xpath "string($item/@*[local-name()='edSignature'])" "$APPCAST")"
   [[ -n "$SIG" ]] || fail "appcast.xml has no sparkle:edSignature"
 
   # sign_update verifies with the private key file (it has no public-key option).
   SU="$ROOT/.build/artifacts/sparkle/Sparkle/bin/sign_update"
   [[ -x "$SU" ]] || fail "sign_update not found at $SU"
-  "$SU" --verify --ed-key-file "$WORK/seed" "$ZIP" "$SIG" || fail "sign_update --verify rejected the appcast signature"
+  "$SU" --verify --ed-key-file "$WORK/seed" "$DMG" "$SIG" || fail "sign_update --verify rejected the appcast signature"
+  echo "ok: sign_update --verify accepts the DMG signature"
 
-  rm -f "$WORK/key.pem" "$WORK/seed"
+  rm -f "$WORK/key.pem" "$WORK/other.pem" "$WORK/seed"
   rm -rf "$ROOT/dist"
-  echo "release dry-run ok (arm64-only zip, appcast url + edSignature verified)"
+  echo "release dry-run ok (UDZO dmg: Skitcho.app + Applications link, arm64-only, appcast url + edSignature)"
   exit 0
 fi
 
@@ -88,6 +173,7 @@ expect_key LSMinimumSystemVersion 15.0
 expect_key LSRequiresNativeExecution true
 expect_key CFBundleDocumentTypes:0:LSItemContentTypes:0 public.image
 expect_key CFBundleDocumentTypes:0:CFBundleTypeRole Editor
+expect_key CFBundleDocumentTypes:0:LSHandlerRank Alternate
 expect_key CFBundleDocumentTypes:1:LSItemContentTypes:0 com.oleggohman.skitcho.document
 expect_key CFBundleDocumentTypes:1:CFBundleTypeRole Editor
 expect_key CFBundleDocumentTypes:1:LSTypeIsPackage true
