@@ -94,7 +94,6 @@ public final class SaveCoordinator {
         let isCopy = Self.isSkitchoFile(nsDocument)
         self.writeJPEG(to: choice.url, for: nsDocument, retarget: !isCopy, markSaved: !isCopy)
       case .skitcho:
-        self.jpegTarget = nil
         self.saveAsSkitcho(to: choice.url, nsDocument)
       }
     }
@@ -154,9 +153,14 @@ public final class SaveCoordinator {
 
   private func saveAsSkitcho(to url: URL, _ nsDocument: NSDocument) {
     // The editable format goes through the document system, which uses the nonisolated snapshot/fileWrapper.
+    // The JPEG target is dropped only once the document really is a `.skitcho` file: after a failed save, ⌘S
+    // must keep writing the JPEG chosen earlier, not fall back to the opened file.
     nsDocument.save(to: url, ofType: UTType.skitchoDocument.identifier, for: .saveAsOperation) {
       [weak self] error in
-      guard let error else { return }
+      guard let error else {
+        self?.jpegTarget = nil
+        return
+      }
       let message = error.localizedDescription
       Task { @MainActor in self?.onError?(message) }
     }

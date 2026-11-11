@@ -15,6 +15,8 @@ private final class RecordingDocument: NSDocument {
   var saveCalls = 0
   var saveAsCalls = 0
   var savedTo: [(url: URL, type: String, operation: NSDocument.SaveOperationType)] = []
+  /// Reported by `save(to:ofType:for:)` instead of succeeding, when set.
+  var saveError: Error?
 
   override func save(_ sender: Any?) { saveCalls += 1 }
   override func saveAs(_ sender: Any?) { saveAsCalls += 1 }
@@ -23,7 +25,7 @@ private final class RecordingDocument: NSDocument {
     completionHandler: @escaping @MainActor @Sendable (Error?) -> Void
   ) {
     savedTo.append((url, typeName, saveOperation))
-    completionHandler(nil)
+    completionHandler(saveError)
   }
 }
 
@@ -198,6 +200,32 @@ private final class RecordingDocument: NSDocument {
     #expect(nsDocument.savedTo.first?.type == UTType.skitchoDocument.identifier)
     #expect(nsDocument.savedTo.first?.operation == .saveAsOperation)
     #expect(!FileManager.default.fileExists(atPath: skitcho.path))
+  }
+
+  @Test func aFailedSkitchoSaveKeepsTheJPEGTarget() throws {
+    let black = try blackJPEG()
+    let opened = try writeFile("a.jpg", black)
+    let nsDocument = document(type: .jpeg, url: opened)
+    let log = PanelLog()
+    let jpeg = directory.appendingPathComponent("b.jpg")
+    log.choice = SavePanelChoice(url: jpeg, format: .jpeg)
+    let coordinator = makeCoordinator(makeEditor(), nsDocument: nsDocument, log: log)
+    coordinator.saveAs()
+    #expect(coordinator.jpegTarget == jpeg)
+
+    nsDocument.saveError = Failure()
+    log.choice = SavePanelChoice(url: directory.appendingPathComponent("c.skitcho"), format: .skitcho)
+    coordinator.saveAs()
+    #expect(nsDocument.savedTo.count == 1)
+    #expect(coordinator.jpegTarget == jpeg)
+
+    // ⌘S still writes the JPEG chosen by Save As and leaves the opened original alone.
+    try FileManager.default.removeItem(at: jpeg)
+    nsDocument.updateChangeCount(.changeDone)
+    coordinator.save()
+    #expect(isJPEG(try Data(contentsOf: jpeg)))
+    #expect(try Data(contentsOf: opened) == black)
+    #expect(!nsDocument.isDocumentEdited)
   }
 
   @Test func cancellingThePanelChangesNothing() {
