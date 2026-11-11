@@ -17,7 +17,7 @@ scripts/test-workflows.sh
 - Run the app **only via `build/Skitcho.app`**. The bare SwiftPM executable lacks document types, Sparkle and the icon.
 - **arm64 only.** Always pass `--arch arm64`; no x86_64 or universal slices anywhere (`test-bundle.sh` asserts thin arm64).
 - SwiftPM, `git commit` and the bundle scripts need the sandbox disabled. `open` does not work in a sandbox.
-- Releases: a `v*` tag runs `.github/workflows/release.yml`; the flow and secrets are in `docs/RELEASING.md`.
+- Build, test and release happen only on the maintainer's Mac; there is no CI build. GitHub runs only the Linux security scans. The local release flow is in `docs/RELEASING.md`.
 
 ## Architecture
 
@@ -67,5 +67,5 @@ equivalents on purpose (they would fire while typing).
 ## Conventions
 
 - Feature work on a branch or worktree, never `main`; Conventional Commits; comments in English.
-- No secrets in the repo; signing material lives in GitHub secrets only.
+- No secrets in the repo; signing material lives only in the maintainer's keychain, never in GitHub.
 - Do not commit local tool directories such as `.boost/`.

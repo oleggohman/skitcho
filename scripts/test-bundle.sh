@@ -54,8 +54,8 @@ if [[ "${1:-}" == "--release-dry-run" ]]; then
 XML
     echo "file://$WORK/appcast-$1-$2.xml"
   }
-  # $1 = public key, $2 = appcast URL; output goes to $WORK/release.log. Env prefixes on the call (GITHUB_*,
-  # FIRST_RELEASE) reach release.sh.
+  # $1 = public key, $2 = appcast URL; output goes to $WORK/release.log. Env prefixes on the call (FIRST_RELEASE)
+  # reach release.sh.
   run_release() {
     SPARKLE_ED_PRIVATE_KEY="$(cat "$WORK/seed")" SPARKLE_PUBLIC_ED_KEY="$1" SIGN_IDENTITY="" APPCAST_URL="$2" \
       "$ROOT/scripts/release.sh" "$DRY_VERSION" --dry-run >"$WORK/release.log" 2>&1
@@ -87,19 +87,8 @@ XML
     "$PUB" "$OLD_FEED"
   FIRST_RELEASE=yes expect_reject "a FIRST_RELEASE other than 1" "FIRST_RELEASE must be unset or 1" \
     "$PUB" "$OLD_FEED"
-  # A real (non dry-run) release in CI must run from its own tag; this fails before reading any secret.
-  if GITHUB_ACTIONS=true GITHUB_REF_NAME=feature/x "$ROOT/scripts/release.sh" "$DRY_VERSION" >"$WORK/release.log" 2>&1; then
-    fail "release.sh accepted a CI release from a branch"
-  fi
-  grep -qF "does not match v$DRY_VERSION" "$WORK/release.log" || {
-    cat "$WORK/release.log" >&2
-    fail "CI release from a branch: missing 'does not match v$DRY_VERSION'"
-  }
-  echo "ok: preflight rejects a CI release whose ref is not the version tag"
-
-  # The dry-run itself runs in CI on branches and PRs, so a non-tag ref must not stop it.
   rm -rf "$ROOT/dist"
-  if ! GITHUB_ACTIONS=true GITHUB_REF_NAME=feature/x run_release "$PUB" "$OLD_FEED"; then
+  if ! run_release "$PUB" "$OLD_FEED"; then
     cat "$WORK/release.log" >&2
     fail "release.sh --dry-run failed"
   fi
