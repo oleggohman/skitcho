@@ -233,6 +233,26 @@ import struct SkitchoCore.Document
     #expect(abs(canvas.zoom - min((280 - 2 * CanvasView.margin - reserve) / 300, before)) < 1e-9)
   }
 
+  @Test func cropBarDoesNotRezoomAHeightBoundFitOnLaterLayouts() {
+    // The height binds the fit here, so the bar's reserve would change the fitted zoom.
+    let (scrollView, canvas, editor) = fittedScrollView(size: CGSize(width: 1000, height: 280))
+    let before = canvas.zoom
+    #expect(abs(before - (280 - 2 * CanvasView.margin) / 300) < 1e-9)
+    editor.currentTool = .crop
+    canvas.editorDidChange()
+    #expect(canvas.bottomReserve > 0)
+    // Layout passes without a viewport change (e.g. the bar appearing) keep the zoom.
+    scrollView.needsLayout = true
+    scrollView.layoutSubtreeIfNeeded()
+    #expect(canvas.zoom == before)
+    editor.currentTool = .select
+    canvas.editorDidChange()
+    scrollView.needsLayout = true
+    scrollView.layoutSubtreeIfNeeded()
+    #expect(canvas.zoom == before)
+    #expect(canvas.fitMode)
+  }
+
   @Test func handleTracksFitMode() {
     let (_, canvas, _) = fittedScrollView()
     let handle = CanvasHandle()

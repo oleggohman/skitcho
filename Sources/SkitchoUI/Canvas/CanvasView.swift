@@ -68,6 +68,8 @@ public final class CanvasView: NSView {
   private var spaceDown = false
   private var panLast: CGPoint?
   private var lastCanvasSize: CGSize
+  /// The viewport size seen by the last scroll view layout pass (see `viewportDidLayout`).
+  private var lastLayoutViewport: CGSize?
 
   public init(editor: EditorModel) {
     self.editor = editor
@@ -255,6 +257,19 @@ public final class CanvasView: NSView {
   func refitIfNeeded() {
     if fitMode, let fitted = fittedZoom(), abs(fitted - zoom) > 1e-9 {
       setZoom(fitted)
+    } else {
+      updateFrameSize()
+    }
+  }
+
+  /// Called by the scroll view on every layout pass. In fit mode it refits only when the viewport size changed:
+  /// layouts for other reasons (the crop bar appearing or going away changes only `bottomReserve`) keep the zoom.
+  func viewportDidLayout() {
+    let viewport = viewportSize
+    let changed = viewport != lastLayoutViewport
+    lastLayoutViewport = viewport
+    if changed, fitMode, let viewport, viewport.width > 0, viewport.height > 0 {
+      refitIfNeeded()
     } else {
       updateFrameSize()
     }
@@ -626,9 +641,6 @@ final class CanvasScrollView: NSScrollView {
   override func layout() {
     super.layout()
     guard let canvas = documentView as? CanvasView else { return }
-    if canvas.fitMode, contentSize.width > 0, contentSize.height > 0 {
-      canvas.refitIfNeeded()
-    }
-    canvas.updateFrameSize()
+    canvas.viewportDidLayout()
   }
 }
