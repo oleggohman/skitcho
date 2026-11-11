@@ -59,6 +59,9 @@ for f in "${files[@]}"; do
     ref="${ref// /}"
     ref="${ref%%#*}"
     [[ "$ref" =~ @[0-9a-f]{40}$ ]] || fail "$f: action not SHA-pinned: $line"
+    # Only GitHub-owned actions, plus the OpenSSF Scorecard action.
+    [[ "$ref" =~ ^(actions|github)/ || "$ref" =~ ^ossf/scorecard-action@ ]] ||
+      fail "$f: action owner not allowed (GitHub-owned or ossf/scorecard-action only): $line"
   done < <(grep -E '^[[:space:]]*(- )?uses:' "$f")
 done
 echo "ok: workflow and script grep checks (${#files[@]} workflows, scripts/*.sh)"
