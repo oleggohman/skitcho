@@ -67,7 +67,7 @@ public final class SelectPanToolController: ToolController {
         return
       }
       if !editor.selection.contains(hit.id) { editor.select(hit.id) }
-      let originals = Dictionary(uniqueKeysWithValues: editor.selectedElements.map { ($0.id, $0) })
+      let originals = Dictionary(uniqueKeysWithValues: editor.movingElements.map { ($0.id, $0) })
       gesture = .moving(start: point, originals: originals)
     } else {
       let base = modifiers.contains(.shift) ? editor.selection : []

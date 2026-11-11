@@ -463,10 +463,11 @@
 - Create: `Sources/SkitchoUI/Panels/ResizeBar.swift`
 - Create: `Tests/SkitchoUITests/ResizeTests.swift`
 
-- [ ] resize: scale slider, W/H fields, proportion link toggle; Apply/Cancel
-- [ ] rotate 90° CW/CCW and flip H/V command actions
-- [ ] write tests: the proportion link keeps the aspect ratio, unlinked edits change one axis, the size guard surfaces an error message state
-- [ ] run tests. Must pass before task 24.
+- [x] resize: scale slider, W/H fields, proportion link toggle; Apply/Cancel
+- [x] rotate 90° CW/CCW and flip H/V command actions
+- [x] write tests: the proportion link keeps the aspect ratio, unlinked edits change one axis, the size guard surfaces an error message state
+- [x] run tests. Must pass before task 24.
+- [x] ➕ a stamp's linked label moves with its stamp (drag, nudge, EditorModel.moveSelection) in the same undo step, once when the label is also selected; implemented in EditorModel (`moveTargets(of:)`, `movingElements`) with Core tests
 
 ### Task 24: Document window wiring
 

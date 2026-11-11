@@ -131,10 +131,26 @@ public final class EditorModel {
 
   public func removeSelection() { remove(ids: selection) }
 
-  /// Moves the selection by `delta` as one undo step.
+  /// The IDs that move with `ids`: the elements themselves plus the linked label of every stamp among them.
+  /// A set, so a label that is also selected is counted once.
+  public func moveTargets(of ids: Set<UUID>) -> Set<UUID> {
+    var targets = ids
+    for element in document.elements where ids.contains(element.id) {
+      if case .stamp(_, _, _, let label?) = element.kind { targets.insert(label) }
+    }
+    return targets.intersection(document.elements.map(\.id))
+  }
+
+  /// The selected elements plus the linked labels of selected stamps (what a move gesture must translate).
+  public var movingElements: [Element] {
+    let ids = moveTargets(of: selection)
+    return document.elements.filter { ids.contains($0.id) }
+  }
+
+  /// Moves the selection (and the linked labels of selected stamps) by `delta` as one undo step.
   public func moveSelection(by delta: CGPoint, name: String = "Move") {
     guard delta != .zero else { return }
-    let ids = selection
+    let ids = moveTargets(of: selection)
     perform(name) { document in
       document.elements = document.elements.map { ids.contains($0.id) ? $0.translated(by: delta) : $0 }
     }
