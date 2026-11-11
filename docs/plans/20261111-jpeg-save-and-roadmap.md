@@ -226,14 +226,14 @@ The maintainer is away and asked for autonomous execution. Decisions not settled
 - Create: `Tests/SkitchoUITests/SaveFormatTests.swift`
 - Create: a test pinning the autosave fact (read-only introspection)
 
-- [ ] `SaveFormat` (`.jpeg` default first, `.skitcho`), `jpegQuality = 0.9`, `jpegData(for:)` via `Exporter` at 1×, with errors mapped to readable messages
-- [ ] write tests:
+- [x] `SaveFormat` (`.jpeg` default first, `.skitcho`), `jpegQuality = 0.9`, `jpegData(for:)` via `Exporter` at 1×, with errors mapped to readable messages
+- [x] write tests:
   - JPEG decodes, has the canvas size and has annotation pixels flattened in
   - an oversized canvas throws, no crash
   - `jpegData` works when called from `DispatchQueue.global()` (off the main actor)
   - `writableContentTypes` is still exactly `[.skitchoDocument]` — already pinned by `DocumentSpikeTests.writableTypesAreSkitchoOnly`; reference it, do not duplicate
-- [ ] write a read-only introspection test: `NSClassFromString("SwiftUI.PlatformDocument")` responds `autosavesInPlace == true`. It documents why JPEG must not be a writable type and fails loudly if Apple changes it (skip if the class is absent)
-- [ ] run tests — must pass before task 6
+- [x] write a read-only introspection test: `NSClassFromString("SwiftUI.PlatformDocument")` responds `autosavesInPlace == true`. It documents why JPEG must not be a writable type and fails loudly if Apple changes it (skip if the class is absent)
+- [x] run tests — must pass before task 6
 
 ### Task 6: SaveCoordinator logic (JPEG default, Skitcho handoff, safe overwrite)
 
