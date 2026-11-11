@@ -9,8 +9,9 @@ public enum FileMenuItem: CaseIterable, Sendable {
 
   /// When an item is available.
   public enum Enablement: Sendable {
-    /// Any window is key (Close also works in the About and Settings windows).
-    case anyKeyWindow
+    /// Always. Close acts on whatever window is key (also About and Settings) and does nothing without one; the
+    /// key window is not observable, so a rule based on it could leave Close stuck disabled.
+    case always
     /// The key window is a document window.
     case documentWindow
     /// The key window's document is a `.skitcho` file that has been saved (it has a `fileURL`).
@@ -41,18 +42,17 @@ public enum FileMenuItem: CaseIterable, Sendable {
 
   public var enablement: Enablement {
     switch self {
-    case .close: .anyKeyWindow
+    case .close: .always
     case .save, .saveAs, .duplicate: .documentWindow
     case .revertToSaved, .rename, .moveTo: .savedSkitchoDocument
     }
   }
 
-  /// Whether the item is enabled. `hasKeyWindow` is whether any window is key; `document` is the key window's
-  /// document, nil when it is not a document window.
+  /// Whether the item is enabled. `document` is the key window's document, nil when it is not a document window.
   @MainActor
-  public func isEnabled(hasKeyWindow: Bool, document: NSDocument?) -> Bool {
+  public func isEnabled(document: NSDocument?) -> Bool {
     switch enablement {
-    case .anyKeyWindow: return hasKeyWindow
+    case .always: return true
     case .documentWindow: return document != nil
     case .savedSkitchoDocument:
       guard let document else { return false }

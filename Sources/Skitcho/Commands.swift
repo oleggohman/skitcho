@@ -25,11 +25,11 @@ struct SkitchoCommands: Commands {
     }
 
     // Replaces Close, Save, Save As/Duplicate and Revert: Save writes a JPEG by default (see `SaveCoordinator`).
-    // Close goes straight to the key window so it also works in the About and Settings windows.
+    // Close goes straight to the key window so it also works in the About and Settings windows. It stays enabled:
+    // `NSApp.keyWindow` is not observable, so disabling on it could leave Close stuck off.
     CommandGroup(replacing: .saveItem) {
       Button(FileMenuItem.close.title) { NSApp.keyWindow?.performClose(nil) }
         .keyboardShortcut(FileMenuItem.close.shortcut)
-        .disabled(!FileMenuItem.close.isEnabled(hasKeyWindow: NSApp.keyWindow != nil || editor != nil, document: nil))
       Divider()
       fileItem(.save)
       fileItem(.saveAs)

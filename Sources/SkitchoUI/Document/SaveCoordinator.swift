@@ -118,7 +118,7 @@ public final class SaveCoordinator {
 
   /// Whether `item` is available for this window's document.
   public func isEnabled(_ item: FileMenuItem) -> Bool {
-    item.isEnabled(hasKeyWindow: true, document: resolveDocument(window()))
+    item.isEnabled(document: resolveDocument(window()))
   }
 
   // MARK: Document access

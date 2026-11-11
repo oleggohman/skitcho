@@ -62,13 +62,13 @@ private final class MenuRecordingDocument: NSDocument {
     }
   }
 
-  @Test func closeIsEnabledWheneverAnyWindowIsKey() {
-    // About or Settings: a key window, no document.
-    #expect(FileMenuItem.close.isEnabled(hasKeyWindow: true, document: nil))
-    #expect(!FileMenuItem.close.isEnabled(hasKeyWindow: false, document: nil))
-    #expect(FileMenuItem.close.isEnabled(hasKeyWindow: true, document: document(type: .jpeg, url: nil)))
+  @Test func closeIsAlwaysEnabled() {
+    // About or Settings (no document) or no key window at all: the key window is not observable.
+    #expect(FileMenuItem.close.enablement == .always)
+    #expect(FileMenuItem.close.isEnabled(document: nil))
+    #expect(FileMenuItem.close.isEnabled(document: document(type: .jpeg, url: nil)))
     // Document-only items are off without a document.
-    #expect(!FileMenuItem.save.isEnabled(hasKeyWindow: true, document: nil))
+    #expect(!FileMenuItem.save.isEnabled(document: nil))
   }
 
   @Test func enablementByDocumentKind() {
@@ -86,7 +86,7 @@ private final class MenuRecordingDocument: NSDocument {
     ]
     for (name, document, expected) in kinds {
       for (item, enabled) in expected {
-        #expect(item.isEnabled(hasKeyWindow: true, document: document) == enabled, "\(item), \(name)")
+        #expect(item.isEnabled(document: document) == enabled, "\(item), \(name)")
       }
     }
   }
