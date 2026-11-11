@@ -49,8 +49,14 @@ done
 # Releases ship a DMG; the zip packaging is gone for good.
 hits="$(grep -nE 'ditto[[:space:]]+-c[[:space:]]+-k|[.]zip([^A-Za-z]|$)' "${files[@]}" scripts/*.sh || true)"
 [[ -z "$hits" ]] || fail "zip packaging left over: $hits"
-grep -qE 'gh release create .*dist/Skitcho-\*[.]dmg dist/appcast[.]xml' .github/workflows/release.yml ||
-  fail "release.yml does not upload dist/Skitcho-*.dmg and dist/appcast.xml"
+
+# Skitcho is built, tested and released only on the maintainer's Mac: no workflow may run on macOS, and the
+# old build and release workflows must stay gone.
+for gone in ci release; do
+  [[ ! -e ".github/workflows/$gone.yml" ]] || fail ".github/workflows/$gone.yml must not exist (no CI build or release)"
+done
+hits="$(grep -nEi 'macos|xcode|swift[[:space:]]+(build|test)' "${files[@]}" | grep -vE '^[^:]+:[0-9]+:[[:space:]]*#' || true)"
+[[ -z "$hits" ]] || fail "a workflow uses a macOS runner or builds Swift: $hits"
 
 for f in "${files[@]}"; do
   # Every action reference must be pinned to a 40-hex commit SHA.
@@ -66,7 +72,7 @@ for f in "${files[@]}"; do
 done
 echo "ok: workflow and script grep checks (${#files[@]} workflows, scripts/*.sh)"
 
-# Security workflows: they must exist, start from empty token permissions and never persist credentials.
+# The remaining workflows are all security scans: they must exist, start from empty token permissions and never persist credentials.
 for w in codeql dependency-review scorecard trivy; do
   [[ -f ".github/workflows/$w.yml" ]] || fail "missing .github/workflows/$w.yml"
 done
@@ -82,13 +88,10 @@ for f in "${files[@]}"; do
   # Pins must carry a trailing version comment.
   hits="$(grep -E '^[[:space:]]*(- )?uses:' "$f" | grep -vE '@[0-9a-f]{40}[[:space:]]+#[[:space:]]*v[0-9]+[.][0-9]+[.][0-9]+' || true)"
   [[ -z "$hits" ]] || fail "$f: action pin without '# vX.Y.Z' comment: $hits"
-  # No secrets in these workflows beyond what the repo's other workflows already use.
-  case "$f" in
-    *codeql.yml | *dependency-review.yml | *scorecard.yml | *trivy.yml)
-      hits="$(code_lines 'secrets\.' "$f")"
-      [[ -z "$hits" ]] || fail "$f references secrets: $hits"
-      ;;
-  esac
+  # No repository secrets: signing material never goes to GitHub (the built-in GITHUB_TOKEN is not a secret
+  # reference here).
+  hits="$(code_lines 'secrets\.' "$f")"
+  [[ -z "$hits" ]] || fail "$f references secrets: $hits"
 done
 # The Trivy binary is pinned by a hardcoded checksum (trivy-action is not allowed by policy).
 grep -qE '^[[:space:]]*TRIVY_SHA256:[[:space:]]*[0-9a-f]{64}[[:space:]]*$' .github/workflows/trivy.yml ||

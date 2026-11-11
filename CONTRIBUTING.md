@@ -16,6 +16,9 @@ swift test --arch arm64 --no-parallel
 swift format lint --strict --recursive Sources Tests
 ```
 
+- There is no CI build: Skitcho is built, tested and released only on the maintainer's Mac. Before opening a
+  pull request, run the checks locally: build, serial tests, lint, `scripts/test-bundle.sh` and
+  `scripts/test-workflows.sh` (see the table below).
 - Run tests serially (`--no-parallel`) and never run two test commands at the same time.
 - Keep the build free of project warnings (Swift 6 strict concurrency).
 - Add or update tests with every behavior change. `SkitchoCore` is AppKit-free and is the place for logic
@@ -41,13 +44,13 @@ Try the app by launching `build/Skitcho.app`, not the bare executable.
   `AnnotationColor`. Hex color literals are allowed only in those two token files (or on a line tagged
   `lint:allow-hex`); `scripts/test-bundle.sh` enforces this. Use system fonts only, through the
   `Typography` tokens, and never add font files.
-- **No secrets in the repository.** Signing keys, certificates and API keys live in GitHub secrets only.
+- **No secrets in the repository.** Signing keys, certificates and API keys live only in the maintainer's keychain.
   See [SECURITY.md](SECURITY.md) and [docs/RELEASING.md](docs/RELEASING.md).
 - Do not add a dependency without discussing it first. Sparkle is the only third-party package.
 
 ## Security automation
 
-- **CodeQL** scans the Swift sources and the workflow files on pushes to `main`, pull requests and weekly.
+- **CodeQL** scans the workflow files (not the Swift sources) on pushes to `main`, pull requests and weekly.
 - **Trivy** scans the repository for vulnerabilities, secrets and misconfigurations after merges to `main`
   and weekly; HIGH and CRITICAL findings fail the run. It is installed as a pinned binary with a hardcoded
   SHA-256 (update `TRIVY_VERSION` and `TRIVY_SHA256` together).

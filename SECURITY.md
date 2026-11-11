@@ -22,5 +22,5 @@ Details for maintainers are in [docs/RELEASING.md](docs/RELEASING.md).
 ## Secrets
 
 No secret (private signing key, certificate, API key, password) is ever committed to this repository.
-They live only in GitHub Actions secrets and the maintainer's keychain. If you find one in the history,
+They live only in the maintainer's keychain and are never stored in GitHub. If you find one in the history,
 report it as described above.

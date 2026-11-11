@@ -6,6 +6,7 @@
 #      APPCAST_URL (published feed used for merging and the version guards; tests point it at a file:// fixture),
 #      FIRST_RELEASE=1 (required when no feed is published yet: only then is a 404 for the feed accepted).
 # --dry-run signs ad-hoc and skips notarization. Requires openssl@3 (ed25519) to check the Sparkle key pair.
+# Local only: run on the maintainer's Mac, then publish by hand with `gh release create` (see docs/RELEASING.md).
 # Secrets are only read from the environment and never printed. Do not add xtrace.
 set -euo pipefail
 
@@ -25,10 +26,6 @@ if [[ $# -eq 2 ]]; then
   DRY_RUN=1
 fi
 [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || fail "VERSION must match X.Y.Z (got '$VERSION')"
-# A real release in CI must come from its own tag; a dry-run (CI on branches and PRs) builds any version.
-if [[ "$DRY_RUN" == 0 && "${GITHUB_ACTIONS:-}" == "true" && "${GITHUB_REF_NAME:-}" != "v$VERSION" ]]; then
-  fail "GITHUB_REF_NAME '${GITHUB_REF_NAME:-}' does not match v$VERSION"
-fi
 FIRST_RELEASE="${FIRST_RELEASE:-}"
 [[ -z "$FIRST_RELEASE" || "$FIRST_RELEASE" == 1 ]] || fail "FIRST_RELEASE must be unset or 1 (got '$FIRST_RELEASE')"
 
