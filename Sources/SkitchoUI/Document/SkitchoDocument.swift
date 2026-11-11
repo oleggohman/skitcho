@@ -21,8 +21,8 @@ public final class SkitchoDocument: @preconcurrency ReferenceFileDocument {
     if configuration.contentType.conforms(to: .skitchoDocument) {
       self.initial = try PackageCodec.document(from: configuration.file)
     } else {
-      guard let data = configuration.file.regularFileContents else { throw PackageCodecError.corruptImage }
-      self.initial = try PackageCodec.document(fromImageData: data)
+      guard let data = configuration.file.regularFileContents else { throw ImageImportError.unreadable }
+      self.initial = try ImageImporter.load(data: data)
     }
   }
 

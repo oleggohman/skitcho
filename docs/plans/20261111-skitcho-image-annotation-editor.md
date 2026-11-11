@@ -351,11 +351,11 @@
 - Create: `Sources/SkitchoCore/IO/Exporter.swift`, `ImageImporter.swift`
 - Create: `Tests/SkitchoCoreTests/ExportImportTests.swift`
 
-- [ ] `Exporter.data` for PNG/JPEG(q)/TIFF at 1×/2×
-- [ ] `ImageImporter.load(data:)`/`load(url:)`: EXIF orientation applied, converted to sRGB; `Document.blank(size: 800×600, background: .white)`
-- [ ] write tests: export→decode each format (dims, type), JPEG quality changes size, an in-test generated orientation-6 JPEG imports upright
-- [ ] write tests for errors: unreadable data, zero-size image
-- [ ] run tests. Must pass before task 14.
+- [x] `Exporter.data` for PNG/JPEG(q)/TIFF at 1×/2×
+- [x] `ImageImporter.load(data:)`/`load(url:)`: EXIF orientation applied, converted to sRGB; `Document.blank(size: 800×600, background: .white)`
+- [x] write tests: export→decode each format (dims, type), JPEG quality changes size, an in-test generated orientation-6 JPEG imports upright
+- [x] write tests for errors: unreadable data, zero-size image
+- [x] run tests. Must pass before task 14.
 
 ### Task 14: CloudZone theme — colors, type scale (system font), spacing, motion, components
 

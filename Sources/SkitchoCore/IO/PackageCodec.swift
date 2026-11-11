@@ -1,7 +1,5 @@
 import CoreGraphics
 import Foundation
-import ImageIO
-import UniformTypeIdentifiers
 
 /// Errors thrown while reading or writing the `.skitcho` package.
 public enum PackageCodecError: Error, Equatable {
@@ -58,32 +56,23 @@ public enum PackageCodec {
     guard let header = try? decoder.decode(Header.self, from: jsonData) else { throw PackageCodecError.corruptJSON }
     guard header.version <= Document.currentVersion else { throw PackageCodecError.unsupportedVersion(header.version) }
     guard let payload = try? decoder.decode(Payload.self, from: jsonData) else { throw PackageCodecError.corruptJSON }
-    let image = try decodeImage(pngData)
+    let image: CGImage
+    do {
+      image = try ImageImporter.decodeImage(pngData)
+    } catch {
+      throw PackageCodecError.corruptImage
+    }
     return Document(
       baseImage: image, canvasSize: CGSize(width: payload.canvasWidth, height: payload.canvasHeight),
       imageOrigin: CGPoint(x: payload.imageOriginX, y: payload.imageOriginY), background: payload.background,
       elements: payload.elements, version: payload.version)
   }
 
-  /// Builds a document from raw image bytes (PNG, JPEG, ...).
-  public static func document(fromImageData data: Data) throws -> Document {
-    Document(baseImage: try decodeImage(data))
-  }
-
-  public static func decodeImage(_ data: Data) throws -> CGImage {
-    guard let source = CGImageSourceCreateWithData(data as CFData, nil),
-      let image = CGImageSourceCreateImageAtIndex(source, 0, nil)
-    else { throw PackageCodecError.corruptImage }
-    return image
-  }
-
   public static func pngData(_ image: CGImage) throws -> Data {
-    let data = NSMutableData()
-    guard let dest = CGImageDestinationCreateWithData(data, UTType.png.identifier as CFString, 1, nil) else {
+    do {
+      return try Exporter.encode(image, format: .png)
+    } catch {
       throw PackageCodecError.encodingFailed
     }
-    CGImageDestinationAddImage(dest, image, nil)
-    guard CGImageDestinationFinalize(dest) else { throw PackageCodecError.encodingFailed }
-    return data as Data
   }
 }

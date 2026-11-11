@@ -37,14 +37,14 @@ import UniformTypeIdentifiers
 
   @Test func pngDataYieldsDocument() throws {
     let png = try PackageCodec.pngData(Document.blank(size: CGSize(width: 20, height: 10)).baseImage)
-    let doc = try PackageCodec.document(fromImageData: png)
+    let doc = try ImageImporter.load(data: png)
     #expect(doc.canvasSize == CGSize(width: 20, height: 10))
     #expect(doc.elements.isEmpty)
   }
 
   @Test func errorsAreTyped() {
-    #expect(throws: PackageCodecError.corruptImage) {
-      _ = try PackageCodec.document(fromImageData: Data([1, 2, 3]))
+    #expect(throws: ImageImportError.unreadable) {
+      _ = try ImageImporter.load(data: Data([1, 2, 3]))
     }
     let empty = FileWrapper(directoryWithFileWrappers: [:])
     #expect(throws: PackageCodecError.missingFile(PackageCodec.jsonName)) {
