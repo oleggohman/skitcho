@@ -75,7 +75,8 @@ private func editedPackage(_ edit: (inout [String: Any]) -> Void) throws -> File
   }
 
   @Test func nonFiniteImageOriginIsCorrupt() throws {
-    // JSON has no NaN or infinity; a literal beyond Double's range is the closest a file can get.
+    // JSON has no NaN or infinity; a literal beyond Double's range is the closest a file can get. Whichever
+    // layer rejects it (the decoder or the drawability check), the file is corrupt.
     let good = try PackageCodec.wrapper(for: Document.blank(size: CGSize(width: 4, height: 4)))
     let png = good.fileWrappers![PackageCodec.imageName]!.regularFileContents!
     let original = String(decoding: good.fileWrappers![PackageCodec.jsonName]!.regularFileContents!, as: UTF8.self)
@@ -84,6 +85,22 @@ private func editedPackage(_ edit: (inout [String: Any]) -> Void) throws -> File
     let json = Data(hostile.utf8)
     #expect(throws: PackageCodecError.corruptJSON) {
       _ = try PackageCodec.document(from: packageWrapper(json: json, png: png))
+    }
+  }
+
+  /// The drawability check itself (unreachable through JSON for non-finite values) rejects them.
+  @Test func drawabilityRejectsNonFiniteOriginAndBadCanvas() {
+    func payload(width: Double = 4, height: Double = 4, x: Double = 0, y: Double = 0) -> PackageCodec.Payload {
+      PackageCodec.Payload(
+        version: Document.currentVersion, canvasWidth: width, canvasHeight: height, imageOriginX: x,
+        imageOriginY: y, background: Document.blank(size: CGSize(width: 4, height: 4)).background, elements: [])
+    }
+    #expect(PackageCodec.isDrawable(payload()))
+    for bad in [
+      payload(x: .infinity), payload(x: -.infinity), payload(y: .nan), payload(width: 0),
+      payload(height: Double(ImageOps.maxSide) + 1), payload(width: .nan),
+    ] {
+      #expect(!PackageCodec.isDrawable(bad))
     }
   }
 
@@ -126,7 +143,10 @@ private func editedPackage(_ edit: (inout [String: Any]) -> Void) throws -> File
     let wide = try pngHeader(width: 60000, height: 1)
     #expect(wide.count < 200)
     #expect(throws: ImageImportError.tooLarge) { _ = try ImageImporter.decodeImage(wide) }
-    // ImageIO's PNG reader already withholds the size of very large pixel counts; it must still not decode.
+    let tall = try pngHeader(width: 1, height: 60000)
+    #expect(throws: ImageImportError.tooLarge) { _ = try ImageImporter.decodeImage(tall) }
+    // ImageIO's PNG reader may withhold the size of very large pixel counts, so this case does not prove the
+    // header guard (wide/tall do); it only shows such a file is refused instead of decoded.
     let huge = try pngHeader(width: 60000, height: 60000)
     #expect(throws: ImageImportError.self) { _ = try ImageImporter.decodeImage(huge) }
   }

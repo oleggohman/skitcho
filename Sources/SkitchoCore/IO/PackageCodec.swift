@@ -57,12 +57,9 @@ public enum PackageCodec {
     guard let header = try? decoder.decode(Header.self, from: jsonData) else { throw PackageCodecError.corruptJSON }
     guard header.version <= Document.currentVersion else { throw PackageCodecError.unsupportedVersion(header.version) }
     guard header.version >= 1 else { throw PackageCodecError.corruptJSON }
-    guard let payload = try? decoder.decode(Payload.self, from: jsonData) else { throw PackageCodecError.corruptJSON }
-    // The file is untrusted: the canvas must be a drawable size and the origin finite, or rendering traps.
-    let limit = Double(ImageOps.maxSide)
-    guard (1...limit).contains(payload.canvasWidth), (1...limit).contains(payload.canvasHeight),
-      payload.imageOriginX.isFinite, payload.imageOriginY.isFinite
-    else { throw PackageCodecError.corruptJSON }
+    guard let payload = try? decoder.decode(Payload.self, from: jsonData), isDrawable(payload) else {
+      throw PackageCodecError.corruptJSON
+    }
     let image: CGImage
     do {
       image = try ImageImporter.decodeImage(pngData)
@@ -73,6 +70,14 @@ public enum PackageCodec {
       baseImage: image, canvasSize: CGSize(width: payload.canvasWidth, height: payload.canvasHeight),
       imageOrigin: CGPoint(x: payload.imageOriginX, y: payload.imageOriginY), background: payload.background,
       elements: payload.elements, version: payload.version)
+  }
+
+  /// The file is untrusted: the canvas must be a drawable size and the origin finite, or rendering traps.
+  /// (JSON cannot spell NaN or infinity, so the origin check is defence in depth behind the decoder.)
+  static func isDrawable(_ payload: Payload) -> Bool {
+    let limit = Double(ImageOps.maxSide)
+    return (1...limit).contains(payload.canvasWidth) && (1...limit).contains(payload.canvasHeight)
+      && payload.imageOriginX.isFinite && payload.imageOriginY.isFinite
   }
 
   public static func pngData(_ image: CGImage) throws -> Data {

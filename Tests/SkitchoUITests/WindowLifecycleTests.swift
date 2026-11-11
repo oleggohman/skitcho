@@ -16,6 +16,12 @@ import struct SkitchoCore.Document
     RunLoop.main.run(until: Date(timeIntervalSinceNow: seconds))
   }
 
+  /// Spins in short slices until `done` holds or `timeout` passes, so a slow release does not flake the test.
+  private func spin(until done: () -> Bool, timeout: TimeInterval = 3) {
+    let deadline = Date(timeIntervalSinceNow: timeout)
+    while !done() && Date() < deadline { spin(0.05) }
+  }
+
   private func makeWindow() -> NSWindow {
     let window = NSWindow(
       contentRect: NSRect(x: 0, y: 0, width: 900, height: 600), styleMask: [.titled, .closable],
@@ -44,7 +50,7 @@ import struct SkitchoCore.Document
       window.contentView = nil
       window.close()
     }
-    spin()
+    spin(until: { weakEditor == nil && weakHandle == nil && weakCanvas == nil })
     #expect(weakEditor == nil)
     #expect(weakHandle == nil)
     #expect(weakCanvas == nil)
