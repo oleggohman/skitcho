@@ -344,4 +344,105 @@ import struct SkitchoCore.Document
     #expect(canvas.textOverlay == nil)
     #expect(editor.document.elements.count == 1)
   }
+
+  // MARK: Save and undo during an edit
+
+  /// A save while text is edited writes the live string (not the blank placeholder) and keeps the edit open.
+  @Test func snapshotDuringEditContainsTheLiveText() throws {
+    let element = textElement("Hello")
+    var initial = Document.blank(size: CGSize(width: 800, height: 600))
+    initial.elements = [element]
+    let document = SkitchoDocument(initial: initial)
+    let manager = UndoManager()
+    manager.groupsByEvent = false
+    document.editor.undoManager = manager
+    document.editor.currentTool = .text
+    let canvas = CanvasView(editor: document.editor)
+    document.canvasHandle.attach(canvas)
+    let controller = try #require(canvas.activeController as? TextToolController)
+
+    #expect(controller.beginEditing(element.id))
+    #expect(string(of: document.editor.document.elements[0]) == "")
+    // Unchanged text: the file keeps "Hello", so Esc (no undo step, document stays clean) loses nothing.
+    #expect(string(of: try document.snapshot(contentType: .skitchoDocument).elements[0]) == "Hello")
+
+    controller.update(text: "Hello world")
+    let saved = try document.snapshot(contentType: .skitchoDocument)
+    #expect(string(of: saved.elements[0]) == "Hello world")
+    #expect(controller.isEditing)
+    #expect(document.editor.isInteracting)
+
+    // Emptied text would be deleted by the commit, so it is not saved either.
+    controller.update(text: "  ")
+    #expect(try document.snapshot(contentType: .skitchoDocument).elements.isEmpty)
+    controller.update(text: "Hello")
+    controller.commit()
+    #expect(!manager.canUndo)
+    #expect(try document.snapshot(contentType: .skitchoDocument) == document.editor.document)
+  }
+
+  /// An empty new stamp label is not saved, and neither is its link.
+  @Test func snapshotDuringEmptyNewLabelDropsTheLink() throws {
+    let (editor, _) = makeEditor()
+    editor.currentTool = .stamp
+    let canvas = CanvasView(editor: editor)
+    let stamp = Element(
+      kind: .stamp(.approve, center: CGPoint(x: 200, y: 200), tailAngle: nil, labelID: nil), style: style)
+    editor.document.elements = [stamp]
+    #expect(canvas.attachLabel(to: stamp.id))
+    #expect(canvas.isEditingText)
+    let saved = canvas.savableDocument
+    #expect(saved.elements.count == 1)
+    if case .stamp(_, _, _, let label) = saved.elements[0].kind { #expect(label == nil) }
+  }
+
+  /// Undo is unavailable while the overlay (the first responder during an edit) is up.
+  @Test func overlayDisablesUndoAndRedo() {
+    let overlay = TextEditorOverlay(sessionID: UUID(), string: "Hi")
+    for name in ["undo:", "redo:"] {
+      let item = NSMenuItem(title: name, action: Selector(name), keyEquivalent: "")
+      #expect(overlay.responds(to: Selector(name)))
+      #expect(!overlay.validateMenuItem(item))
+      #expect(!overlay.validateUserInterfaceItem(item))
+    }
+    let copy = NSMenuItem(title: "Select All", action: #selector(NSText.selectAll(_:)), keyEquivalent: "")
+    #expect(overlay.validateMenuItem(copy))
+  }
+
+  /// If an undo still runs during an edit, the edit is dropped: no stray mutation, no bogus undo step.
+  @Test func undoDuringEditDropsTheEditWithoutRegistering() {
+    let element = textElement("Hello")
+    let (editor, manager) = makeEditor([element])
+    editor.select(element.id)
+    grouped(manager) { editor.moveSelection(by: CGPoint(x: 10, y: 0)) }
+    let canvas = CanvasView(editor: editor)
+    guard let controller = canvas.activeController as? TextToolController else {
+      Issue.record("expected the text controller")
+      return
+    }
+    #expect(controller.beginEditing(element.id))
+    controller.update(text: "World")
+    manager.undo()
+    let afterUndo = editor.document
+    #expect(string(of: afterUndo.elements[0]) == "Hello")
+    #expect(afterUndo.elements[0].bounds.minX == element.bounds.minX)
+
+    // The canvas notices the ended gesture and closes the editor without applying it.
+    canvas.editorDidChange()
+    #expect(!controller.isEditing)
+    #expect(canvas.textOverlay == nil)
+    #expect(editor.document == afterUndo)
+    #expect(manager.canRedo)
+    #expect(!manager.canUndo)
+
+    // A commit arriving late (overlay resigning) changes nothing either.
+    editor.select(element.id)
+    grouped(manager) { editor.moveSelection(by: CGPoint(x: 5, y: 0)) }
+    #expect(controller.beginEditing(element.id))
+    manager.undo()
+    controller.commit(text: "Late")
+    #expect(!controller.isEditing)
+    #expect(string(of: editor.document.elements[0]) == "Hello")
+    #expect(!manager.canUndo)
+  }
 }

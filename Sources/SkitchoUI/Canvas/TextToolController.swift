@@ -116,6 +116,11 @@ public final class TextToolController: ToolController {
   public func commit(text: String) {
     guard let current = session else { return }
     session = nil
+    guard editor.isInteracting else {
+      // The edit's gesture was ended elsewhere (an undo restored another state): the edit no longer applies.
+      changed()
+      return
+    }
     let isEmpty = text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     if isEmpty {
       editor.cancelInteractive()
@@ -139,6 +144,32 @@ public final class TextToolController: ToolController {
     session = nil
     editor.cancelInteractive()
     changed()
+  }
+
+  /// The document as committing the running edit would leave it: the live string in place of the hidden one,
+  /// or without the element when the live text is empty. Saving uses this, so a save during an edit writes
+  /// what the user sees and the edit stays open. Equals `editor.document` when idle.
+  public var documentCommittingEdit: Document {
+    var document = editor.document
+    guard let session, editor.isInteracting,
+      let index = document.elements.firstIndex(where: { $0.id == session.id }),
+      case .text(var content) = document.elements[index].kind
+    else { return document }
+    if session.string.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+      document.elements.remove(at: index)
+      if session.isNew {
+        // A new label is linked inside the same gesture; an empty commit drops the link too.
+        for (i, element) in document.elements.enumerated() {
+          if case .stamp(let kind, let center, let tail, let label) = element.kind, label == session.id {
+            document.elements[i].kind = .stamp(kind, center: center, tailAngle: tail, labelID: nil)
+          }
+        }
+      }
+    } else {
+      content.string = session.string
+      document.elements[index].kind = .text(content)
+    }
+    return document
   }
 
   private func changed() {

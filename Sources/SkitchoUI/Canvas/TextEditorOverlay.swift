@@ -54,6 +54,22 @@ final class TextEditorOverlay: NSTextView {
     insertionPointColor = color
   }
 
+  // The edit runs inside an open editor gesture, so the document's Undo/Redo must wait until it ends: an undo
+  // now would swap the document under the edit. The overlay is the first responder while editing, so it
+  // answers the Edit menu's undo:/redo: actions itself and keeps them disabled.
+  @objc func undo(_ sender: Any?) {}
+  @objc func redo(_ sender: Any?) {}
+
+  override func validateUserInterfaceItem(_ item: any NSValidatedUserInterfaceItem) -> Bool {
+    if item.action == #selector(undo(_:)) || item.action == #selector(redo(_:)) { return false }
+    return super.validateUserInterfaceItem(item)
+  }
+
+  override func validateMenuItem(_ menuItem: NSMenuItem) -> Bool {
+    if menuItem.action == #selector(undo(_:)) || menuItem.action == #selector(redo(_:)) { return false }
+    return super.validateMenuItem(menuItem)
+  }
+
   override func didChangeText() {
     super.didChangeText()
     onTextChange?(string)

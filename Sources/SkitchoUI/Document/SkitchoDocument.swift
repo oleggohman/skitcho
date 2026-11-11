@@ -16,6 +16,8 @@ public final class SkitchoDocument: @preconcurrency ReferenceFileDocument {
 
   public nonisolated let initial: Document
   public lazy var editor = EditorModel(document: initial, undoManager: nil)
+  /// The window's canvas link (created on the main actor by the view). Saving reads a running text edit through it.
+  public lazy var canvasHandle = CanvasHandle()
 
   public nonisolated init(configuration: ReadConfiguration) throws {
     if configuration.contentType.conforms(to: .skitchoDocument) {
@@ -36,8 +38,10 @@ public final class SkitchoDocument: @preconcurrency ReferenceFileDocument {
     self.initial = initial
   }
 
+  /// The document to write. A text edit in progress is included with its live string (the element is
+  /// blank in `editor.document` while the overlay shows it), and the edit stays open.
   public func snapshot(contentType: UTType) throws -> Document {
-    editor.document
+    canvasHandle.canvas?.savableDocument ?? editor.document
   }
 
   public nonisolated func fileWrapper(

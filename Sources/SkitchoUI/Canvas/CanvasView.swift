@@ -4,6 +4,8 @@ import Observation
 import SkitchoCore
 import SwiftUI
 
+import struct SkitchoCore.Document
+
 /// View <-> document mapping: `doc = (view - contentOrigin) / zoom` (the view is flipped, so both are y-down).
 public struct CanvasGeometry: Equatable, Sendable {
   public var zoom: Double
@@ -212,7 +214,14 @@ public final class CanvasView: NSView {
       lastCanvasSize = size
       updateFrameSize()
     }
-    if editor.currentTool != .text, let textController, textController.isEditing { textController.commit() }
+    if let textController, textController.isEditing {
+      // An undo that ran during the edit ended its gesture; close the editor without applying it.
+      if !editor.isInteracting {
+        textController.cancel()
+      } else if editor.currentTool != .text {
+        textController.commit()
+      }
+    }
     if editor.currentTool != .pixelate, pixelateController?.region != nil { pixelateController?.cancel() }
     if editor.currentTool != .crop, cropController?.hasPendingRect == true { cropController?.cancel() }
     syncCropBar()
@@ -442,6 +451,9 @@ public final class CanvasView: NSView {
 
   /// True while a text element is being edited (keys then belong to the text editor).
   public var isEditingText: Bool { textController?.isEditing ?? false }
+
+  /// The document to save: like `editor.document`, but with a running text edit's live string in place.
+  public var savableDocument: Document { textController?.documentCommittingEdit ?? editor.document }
 
   /// Routes a key press: a tool shortcut switches the tool when `ToolShortcutRouter` allows it, otherwise the
   /// active controller gets the key (type-to-create, delete, arrows, Escape). Returns true when consumed.

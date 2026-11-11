@@ -58,7 +58,7 @@ public struct EditorWindowView: View {
 
   public init(document: SkitchoDocument) {
     self.editor = document.editor
-    let handle = CanvasHandle()
+    let handle = document.canvasHandle
     _handle = State(initialValue: handle)
     _commands = State(initialValue: EditorCommandModel(editor: document.editor, handle: handle))
     let editor = document.editor
