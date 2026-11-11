@@ -39,7 +39,8 @@ public final class SkitchoDocument: @preconcurrency ReferenceFileDocument {
   }
 
   /// The document to write. A text edit in progress is included with its live string (the element is
-  /// blank in `editor.document` while the overlay shows it), and the edit stays open.
+  /// blank in `editor.document` while the overlay shows it), and the edit stays open. A state the undo stack
+  /// does not hold yet is registered as one step (see `TextToolController.documentForSaving()`).
   public func snapshot(contentType: UTType) throws -> Document {
     canvasHandle.canvas?.savableDocument ?? editor.document
   }

@@ -347,11 +347,29 @@ import struct SkitchoCore.Document
 
   // MARK: Save and undo during an edit
 
-  /// A save while text is edited writes the live string (not the blank placeholder) and keeps the edit open.
-  @Test func snapshotDuringEditContainsTheLiveText() throws {
-    let element = textElement("Hello")
+  /// A document wired like the app: saving reads the running edit through the canvas.
+  @MainActor
+  private struct SaveFixture {
+    let document: SkitchoDocument
+    let manager: UndoManager
+    let canvas: CanvasView
+    let controller: TextToolController
+    var editor: EditorModel { document.editor }
+
+    /// Saves outside any undo group: a registration would raise (the manager does not group by event).
+    func save() throws -> Document { try document.snapshot(contentType: .skitchoDocument) }
+
+    /// Saves inside one undo group, as the app does.
+    func saveStep() throws -> Document {
+      manager.beginUndoGrouping()
+      defer { manager.endUndoGrouping() }
+      return try save()
+    }
+  }
+
+  private func makeSaveFixture(_ elements: [Element] = []) throws -> SaveFixture {
     var initial = Document.blank(size: CGSize(width: 800, height: 600))
-    initial.elements = [element]
+    initial.elements = elements
     let document = SkitchoDocument(initial: initial)
     let manager = UndoManager()
     manager.groupsByEvent = false
@@ -360,75 +378,190 @@ import struct SkitchoCore.Document
     let canvas = CanvasView(editor: document.editor)
     document.canvasHandle.attach(canvas)
     let controller = try #require(canvas.activeController as? TextToolController)
-
-    #expect(controller.beginEditing(element.id))
-    #expect(string(of: document.editor.document.elements[0]) == "")
-    // Unchanged text: the file keeps "Hello", so Esc (no undo step, document stays clean) loses nothing.
-    #expect(string(of: try document.snapshot(contentType: .skitchoDocument).elements[0]) == "Hello")
-
-    controller.update(text: "Hello world")
-    let saved = try document.snapshot(contentType: .skitchoDocument)
-    #expect(string(of: saved.elements[0]) == "Hello world")
-    #expect(controller.isEditing)
-    #expect(document.editor.isInteracting)
-
-    // Emptied text would be deleted by the commit, so it is not saved either.
-    controller.update(text: "  ")
-    let savedEmpty = try document.snapshot(contentType: .skitchoDocument)
-    #expect(savedEmpty.elements.isEmpty)
-    // Retyping the start text: the edit itself changes nothing, but the file lacks the element, so the
-    // commit still registers a step (marking the document edited) whose undo returns to the saved state.
-    controller.update(text: "Hello")
-    grouped(manager) { controller.commit() }
-    #expect(manager.canUndo)
-    #expect(string(of: document.editor.document.elements[0]) == "Hello")
-    #expect(try document.snapshot(contentType: .skitchoDocument) == document.editor.document)
-    manager.undo()
-    #expect(document.editor.document == savedEmpty)
+    return SaveFixture(document: document, manager: manager, canvas: canvas, controller: controller)
   }
 
-  /// Saved mid-edit as "Hello world", then edited back to the start text: the file differs from the screen,
-  /// so ending the edit (commit or cancel) marks the document edited; without a save it stays clean.
-  @Test func endingAnEditThatWasSavedDifferentMarksTheDocumentEdited() throws {
-    for ending in ["commit", "cancel", "unsaved"] {
-      let element = textElement("Hello")
-      var initial = Document.blank(size: CGSize(width: 800, height: 600))
-      initial.elements = [element]
-      let document = SkitchoDocument(initial: initial)
-      let manager = UndoManager()
-      manager.groupsByEvent = false
-      document.editor.undoManager = manager
-      document.editor.currentTool = .text
-      let canvas = CanvasView(editor: document.editor)
-      document.canvasHandle.attach(canvas)
-      let controller = try #require(canvas.activeController as? TextToolController)
+  /// A save while text is edited writes the live string (not the blank placeholder) and keeps the edit open.
+  @Test func snapshotDuringEditContainsTheLiveText() throws {
+    let element = textElement("Hello")
+    let f = try makeSaveFixture([element])
+    #expect(f.controller.beginEditing(element.id))
+    #expect(string(of: f.editor.document.elements[0]) == "")
+    // Unchanged text: the file keeps "Hello" and the undo stack already holds it, so no step.
+    #expect(string(of: try f.save().elements[0]) == "Hello")
+    #expect(!f.manager.canUndo)
 
-      #expect(controller.beginEditing(element.id))
-      controller.update(text: "Hello world")
-      if ending != "unsaved" {
-        let saved = try document.snapshot(contentType: .skitchoDocument)
-        #expect(string(of: saved.elements[0]) == "Hello world")
+    f.controller.update(text: "Hello world")
+    let saved = try f.saveStep()
+    #expect(string(of: saved.elements[0]) == "Hello world")
+    #expect(f.manager.undoActionName == "Edit Text")
+    // The edit goes on uninterrupted: same session, element still hidden behind the overlay.
+    #expect(f.controller.isEditing)
+    #expect(f.editor.isInteracting)
+    #expect(f.controller.session?.string == "Hello world")
+    #expect(string(of: f.editor.document.elements[0]) == "")
+
+    // Emptied text would be deleted by the commit, so it is not saved either; that save is a delete step.
+    f.controller.update(text: "  ")
+    let savedEmpty = try f.saveStep()
+    #expect(savedEmpty.elements.isEmpty)
+    #expect(f.manager.undoActionName == "Delete Text")
+    // Retyping the start text brings the element back as one more step; undo walks through every save.
+    f.controller.update(text: "Hello")
+    grouped(f.manager) { f.controller.commit() }
+    #expect(string(of: f.editor.document.elements[0]) == "Hello")
+    #expect(try f.save() == f.editor.document)
+    f.manager.undo()
+    #expect(f.editor.document == savedEmpty)
+    f.manager.undo()
+    #expect(f.editor.document == saved)
+    f.manager.undo()
+    #expect(string(of: f.editor.document.elements[0]) == "Hello")
+    #expect(!f.manager.canUndo)
+  }
+
+  /// Saved mid-edit, then committed with the saved text: the save's step is the only one.
+  @Test func saveMidEditThenUnchangedCommitAddsNoStep() throws {
+    let element = textElement("A")
+    let f = try makeSaveFixture([element])
+    #expect(f.controller.beginEditing(element.id))
+    f.controller.update(text: "B")
+    let saved = try f.saveStep()
+    // No group is open: a second step would raise.
+    f.controller.commit()
+    #expect(f.editor.document == saved)
+    #expect(!f.editor.isInteracting)
+    #expect(f.editor.selection == [element.id])
+    f.manager.undo()
+    #expect(string(of: f.editor.document.elements[0]) == "A")
+    #expect(!f.manager.canUndo)
+  }
+
+  /// Saved as B mid-edit, continued to C and committed: undo goes C, B, A and redo goes back A, B, C.
+  @Test func saveMidEditThenContinueUndoesThroughTheSavedState() throws {
+    for isNew in [false, true] {
+      let element = textElement("A")
+      let f = try makeSaveFixture(isNew ? [] : [element])
+      if isNew {
+        #expect(f.controller.beginCreating(at: CGPoint(x: 100, y: 100)))
+      } else {
+        #expect(f.controller.beginEditing(element.id))
       }
-      controller.update(text: "Hello")
-      if ending == "unsaved" {
-        // No group is open: a registration here would raise, and an empty group would count as a step.
-        controller.commit()
-        #expect(string(of: document.editor.document.elements[0]) == "Hello")
-        #expect(!manager.canUndo, "an unchanged, unsaved edit registers nothing")
-        continue
-      }
-      grouped(manager) {
-        if ending == "cancel" { controller.cancel() } else { controller.commit() }
-      }
-      #expect(string(of: document.editor.document.elements[0]) == "Hello")
-      #expect(manager.canUndo, "\(ending): the document must be marked edited")
-      manager.undo()
-      #expect(string(of: document.editor.document.elements[0]) == "Hello world")
-      // The next edit starts without a remembered save: unchanged, it registers nothing.
-      #expect(controller.beginEditing(element.id))
-      controller.commit()
-      #expect(!manager.canUndo)
+      let start = f.document.initial
+      let name = isNew ? "Add Text" : "Edit Text"
+      f.controller.update(text: "B")
+      let saved = try f.saveStep()
+      #expect(f.manager.undoActionName == name)
+      f.controller.update(text: "C")
+      grouped(f.manager) { f.controller.commit() }
+      let committed = f.editor.document
+      #expect(string(of: committed.elements[0]) == "C")
+      #expect(f.manager.undoActionName == name)
+
+      f.manager.undo()
+      #expect(f.editor.document == saved, "isNew \(isNew): undo returns to the saved state")
+      f.manager.undo()
+      #expect(f.editor.document == start)
+      #expect(!f.manager.canUndo)
+      f.manager.redo()
+      #expect(f.editor.document == saved)
+      f.manager.redo()
+      #expect(f.editor.document == committed)
+      #expect(!f.manager.canRedo)
     }
+  }
+
+  /// Saved mid-edit, then cancelled: the document returns to the saved state (the file and the screen
+  /// agree), and the save's step still leads back to the start.
+  @Test func saveMidEditThenCancelKeepsTheSavedState() throws {
+    for isNew in [false, true] {
+      let element = textElement("A")
+      let f = try makeSaveFixture(isNew ? [] : [element])
+      if isNew {
+        #expect(f.controller.beginCreating(at: CGPoint(x: 100, y: 100)))
+      } else {
+        #expect(f.controller.beginEditing(element.id))
+      }
+      let start = f.document.initial
+      f.controller.update(text: "B")
+      let saved = try f.saveStep()
+      f.controller.update(text: "C")
+      // No group is open: the cancel must not register anything.
+      f.controller.cancel()
+      #expect(!f.controller.isEditing)
+      #expect(!f.editor.isInteracting)
+      #expect(f.editor.document == saved, "isNew \(isNew): cancel keeps what was saved")
+      #expect(try f.save() == saved)
+      f.manager.undo()
+      #expect(f.editor.document == start)
+      #expect(!f.manager.canUndo)
+      f.manager.redo()
+      #expect(f.editor.document == saved)
+    }
+  }
+
+  /// An empty new text equals the state before it, so saving it registers nothing.
+  @Test func saveDuringEmptyNewTextRegistersNothing() throws {
+    let f = try makeSaveFixture()
+    #expect(f.controller.beginCreating(at: CGPoint(x: 10, y: 10)))
+    // No group is open: a registration would raise.
+    #expect(try f.save().elements.isEmpty)
+    f.controller.update(text: " \n")
+    #expect(try f.save().elements.isEmpty)
+    f.controller.commit()
+    #expect(f.editor.document.elements.isEmpty)
+    #expect(!f.manager.canUndo)
+  }
+
+  /// A new label saved with text and then emptied is deleted together with its link as one step.
+  @Test func savedNewLabelEmptiedIsDeletedAsOneStep() throws {
+    let stamp = Element(
+      kind: .stamp(.approve, center: CGPoint(x: 200, y: 200), tailAngle: nil, labelID: nil), style: style)
+    let f = try makeSaveFixture([stamp])
+    f.editor.currentTool = .stamp
+    #expect(f.canvas.attachLabel(to: stamp.id))
+    let labelID = try #require(f.controller.session?.id)
+    f.controller.update(text: "B")
+    let saved = try f.saveStep()
+    #expect(saved.elements.count == 2)
+    #expect(f.manager.undoActionName == "Add Text")
+
+    f.controller.update(text: "")
+    grouped(f.manager) { f.controller.commit() }
+    #expect(f.editor.document == f.document.initial, "the label and its link are gone")
+    #expect(f.manager.undoActionName == "Delete Text")
+    f.manager.undo()
+    #expect(f.editor.document == saved)
+    guard case .stamp(_, _, _, let label) = f.editor.document.elements[0].kind else {
+      Issue.record("expected the stamp first")
+      return
+    }
+    #expect(label == labelID)
+    f.manager.undo()
+    #expect(f.editor.document == f.document.initial)
+    #expect(!f.manager.canUndo)
+  }
+
+  /// Undo is disabled during an edit; if one still runs after a mid-edit save, it undoes the save's step and
+  /// the editor closes without registering anything, so the redo stays available.
+  @Test func undoDuringSavedEditRegistersNothing() throws {
+    let element = textElement("A")
+    let f = try makeSaveFixture([element])
+    #expect(f.controller.beginEditing(element.id))
+    f.controller.update(text: "B")
+    let saved = try f.saveStep()
+    f.controller.update(text: "C")
+    f.manager.undo()
+    #expect(!f.editor.isInteracting)
+    #expect(f.editor.document == f.document.initial)
+    // The canvas notices the ended gesture and cancels the edit. No group is open: a registration would raise.
+    f.canvas.editorDidChange()
+    #expect(!f.controller.isEditing)
+    #expect(f.editor.document == f.document.initial)
+    #expect(!f.manager.canUndo)
+    #expect(f.manager.canRedo)
+    f.manager.redo()
+    #expect(f.editor.document == saved)
   }
 
   /// An empty new stamp label is not saved, and neither is its link.

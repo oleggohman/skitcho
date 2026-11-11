@@ -187,6 +187,31 @@ final class CountingUndoManager: UndoManager {
     #expect(content.origin == CGPoint(x: 10, y: 70))
   }
 
+  @Test func checkpointRegistersAStepAndContinuesTheGesture() {
+    let (editor, manager) = makeEditor()
+    let original = editor.document
+    // No gesture, or a checkpoint equal to the start: nothing (no group is open, a registration would raise).
+    #expect(!editor.checkpointInteractive(original, name: "Step"))
+    editor.beginInteractive()
+    #expect(!editor.checkpointInteractive(original, name: "Step"))
+    editor.document.elements.append(rectElement(x: 10))
+    let checkpoint = editor.document
+    step(manager) { #expect(editor.checkpointInteractive(checkpoint, name: "Step")) }
+    #expect(editor.isInteracting)
+    #expect(editor.document == checkpoint)
+    #expect(manager.undoActionName == "Step")
+
+    // The gesture now starts at the checkpoint: cancel returns there, not to the original start.
+    editor.document.elements.append(rectElement(x: 50))
+    editor.cancelInteractive()
+    #expect(editor.document == checkpoint)
+    manager.undo()
+    #expect(editor.document == original)
+    #expect(!manager.canUndo)
+    manager.redo()
+    #expect(editor.document == checkpoint)
+  }
+
   @Test func cancelInteractiveRevertsWithoutRegistering() {
     let (editor, manager) = makeEditor()
     let original = editor.document

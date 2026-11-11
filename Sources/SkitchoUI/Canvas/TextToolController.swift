@@ -28,6 +28,7 @@ public struct TextEditSession: Equatable, Sendable {
 /// `TextEditorOverlay` for `session` and feeds `update(text:)` / `commit(text:)` back. While editing, the
 /// element sits in the document with an empty string (the overlay draws the text) inside an interactive
 /// gesture, so a commit registers exactly one undo step and an empty result registers none for new text.
+/// A save during the edit adds one step up to the saved state (see `documentForSaving()`).
 @MainActor
 public final class TextToolController: ToolController {
   public static let supportedTools: [Tool] = [.text]
@@ -42,8 +43,6 @@ public final class TextToolController: ToolController {
   /// Where type-to-create puts new text: the last pressed point, else the top-left area of the canvas.
   private var lastPoint: CGPoint?
   private var manipulating = false
-  /// The document last saved while the running edit was open (see `documentForSaving()`), nil when none was.
-  private var savedDuringEdit: Document?
 
   /// Called whenever `session` starts, changes or ends.
   public var editingDidChange: (() -> Void)?
@@ -75,7 +74,6 @@ public final class TextToolController: ToolController {
     editor.document.elements.append(element)
     var live = content
     live.string = seed
-    savedDuringEdit = nil
     session = TextEditSession(id: element.id, isNew: true, content: live, style: style, rotation: 0)
     editor.deselect()
     changed()
@@ -94,7 +92,6 @@ public final class TextToolController: ToolController {
     var hidden = content
     hidden.string = ""
     editor.document.elements[index].kind = .text(hidden)
-    savedDuringEdit = nil
     session = TextEditSession(
       id: id, isNew: false, content: content, style: element.style, rotation: element.rotation)
     editor.deselect()
@@ -117,63 +114,64 @@ public final class TextToolController: ToolController {
   /// Ends the edit with `text`. Empty (or whitespace-only) text removes the element: a new element leaves no
   /// undo entry, an existing one is deleted as one undo step. Otherwise exactly one undo step is registered
   /// ("Add Text" or "Edit Text"; none when an existing text is unchanged) and the element is selected.
-  /// If a save during the edit wrote a different document, a step back to it is registered instead of none,
-  /// so the document is marked edited.
+  /// A save during the edit moved the gesture start to the saved state (see `documentForSaving()`), so the
+  /// step then runs from that state; a saved new text that is emptied is deleted as one step.
   public func commit(text: String) {
-    guard let current = session else { return }
-    session = nil
+    guard var current = session else { return }
     guard editor.isInteracting else {
       // The edit's gesture was ended elsewhere (an undo restored another state): the edit no longer applies.
-      savedDuringEdit = nil
+      session = nil
       changed()
       return
     }
-    let isEmpty = text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-    let name = current.isNew ? "Add Text" : "Edit Text"
-    var registered = false
-    if isEmpty {
-      editor.cancelInteractive()
-      if !current.isNew {
-        editor.remove(ids: [current.id], name: "Delete Text")
-        registered = true
-      }
-    } else {
-      if let index = editor.document.elements.firstIndex(where: { $0.id == current.id }),
-        case .text(var content) = editor.document.elements[index].kind
-      {
-        content.string = text
-        editor.document.elements[index].kind = .text(content)
-      }
-      registered = editor.commitInteractive(name: name)
-      editor.select(current.id)
-    }
-    endSavedEdit(registered: registered, name: name)
+    current.content.string = text
+    session = current
+    // The live string in place, or the element (and a new label's link) removed when it is blank.
+    editor.document = documentCommittingEdit
+    session = nil
+    editor.commitInteractive(name: Self.stepName(for: current))
+    if !Self.isBlank(text) { editor.select(current.id) }
     changed()
   }
 
-  /// Abandons the edit: new text disappears, existing text is restored. No undo entry, unless a save during
-  /// the edit wrote a different document (see `commit(text:)`).
+  /// Abandons the edit with no undo entry: the document returns to the gesture start, which is the state
+  /// before the edit (new text disappears, existing text is restored) or the last state saved during it.
+  /// When an undo already ended the gesture, nothing is changed or registered.
   public func cancel() {
-    guard let current = session else { return }
+    guard session != nil else { return }
     session = nil
     editor.cancelInteractive()
-    endSavedEdit(registered: false, name: current.isNew ? "Add Text" : "Edit Text")
     changed()
   }
 
-  /// The edit ended. When it was saved mid-edit and ended on another document without an undo step, the
-  /// change count would stay at the save while the file differs from the screen; one step marks it edited.
-  private func endSavedEdit(registered: Bool, name: String) {
-    defer { savedDuringEdit = nil }
-    guard !registered, let saved = savedDuringEdit else { return }
-    editor.registerStep(returningTo: saved, name: name)
-  }
-
-  /// `documentCommittingEdit`, remembered as the saved state of the running edit (see `commit(text:)`).
+  /// `documentCommittingEdit`, put on the undo stack when it differs from the gesture start.
+  ///
+  /// A save writes a state the undo stack must hold, or undoing past it would return the change count to
+  /// the save while the file differs from the screen. So one step from the gesture start to the saved state
+  /// is registered and the gesture continues from the saved state: the edit stays open, commit and cancel
+  /// compare against what was saved, and undo and redo pass through it. An unchanged edit, or an empty new
+  /// text, equals the start and registers nothing.
+  ///
+  /// `ReferenceFileDocument` calls `snapshot` (and so this) during the save, and SwiftUI owns the change
+  /// count, so the tests assert the undo stack and the document states. If the save records its change count
+  /// before this step is counted (a plain `NSDocument` that registers while writing behaves so), the document
+  /// stays edited after the save; the next save or autosave, with no new step, then marks it clean.
   public func documentForSaving() -> Document {
     let document = documentCommittingEdit
-    if isEditing, editor.isInteracting { savedDuringEdit = document }
+    if let session, editor.isInteracting {
+      editor.checkpointInteractive(document, name: Self.stepName(for: session))
+    }
     return document
+  }
+
+  /// The undo name of the step that ending `session` now would register.
+  private static func stepName(for session: TextEditSession) -> String {
+    if isBlank(session.string) { return "Delete Text" }
+    return session.isNew ? "Add Text" : "Edit Text"
+  }
+
+  private static func isBlank(_ string: String) -> Bool {
+    string.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
   }
 
   /// The document as committing the running edit would leave it: the live string in place of the hidden one,
@@ -185,7 +183,7 @@ public final class TextToolController: ToolController {
       let index = document.elements.firstIndex(where: { $0.id == session.id }),
       case .text(var content) = document.elements[index].kind
     else { return document }
-    if session.string.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+    if Self.isBlank(session.string) {
       document.elements.remove(at: index)
       if session.isNew {
         // A new label is linked inside the same gesture; an empty commit drops the link too.

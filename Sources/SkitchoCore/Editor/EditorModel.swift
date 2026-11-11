@@ -77,12 +77,16 @@ public final class EditorModel {
     return true
   }
 
-  /// Registers an undo step back to `snapshot` when the document differs from it. A save during a gesture
-  /// writes a state the undo stack never held; this marks the document edited when the gesture then ends
-  /// elsewhere without a step of its own, and undoing it returns to what was saved.
-  public func registerStep(returningTo snapshot: Document, name: String) {
-    guard document != snapshot else { return }
-    registerUndo(restoring: snapshot, name: name)
+  /// Registers one undo step from the gesture start to `checkpoint` and continues the gesture from
+  /// `checkpoint`: a later commit or cancel compares against it. `document` is left alone, so the gesture
+  /// goes on uninterrupted. Nothing happens when no gesture runs or `checkpoint` equals the start.
+  /// Returns true when a step was registered.
+  @discardableResult
+  public func checkpointInteractive(_ checkpoint: Document, name: String) -> Bool {
+    guard let start = interactiveStart, checkpoint != start else { return false }
+    interactiveStart = checkpoint
+    registerUndo(restoring: start, name: name)
+    return true
   }
 
   /// Ends the gesture and reverts to the snapshot without registering anything.
