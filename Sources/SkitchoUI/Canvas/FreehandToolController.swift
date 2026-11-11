@@ -8,8 +8,8 @@ import SkitchoCore
 /// While dragging, raw points go through a live low-pass filter and the element is updated inside an
 /// interactive gesture as a straight-segment polyline, so the canvas shows the preview with the normal
 /// renderer. Mouse-up fits cubic beziers to the filtered stream, commits one undo step and selects the new
-/// element. A click without movement creates nothing. Selection rule matches the shape tools: a press on an
-/// already selected element moves the selection, anywhere else starts a stroke.
+/// element. A click without movement creates nothing. Selection rule matches the shape tools: a press on a handle or an
+/// already selected element manipulates the selection, anywhere else starts a stroke.
 @MainActor
 public final class FreehandToolController: ToolController {
   /// Drags shorter than this many view points count as a click.
@@ -45,7 +45,6 @@ public final class FreehandToolController: ToolController {
 
   public var cursor: NSCursor { ToolCursors.cursor(for: tool) }
 
-  private var tolerance: Double { SelectPanToolController.hitSlop / max(zoom(), 0.0001) }
   private var highlighter: Bool { tool == .highlighter }
 
   /// Straight cubic segments through `points`, used for the live preview.
@@ -60,7 +59,7 @@ public final class FreehandToolController: ToolController {
     points = []
     elementID = nil
     manipulating = false
-    if editor.selectedElements.contains(where: { $0.hitTest(point: point, tolerance: tolerance) }) {
+    if manipulator.pressesSelection(at: point) {
       manipulating = true
       manipulator.mouseDown(at: point, modifiers: modifiers)
       return

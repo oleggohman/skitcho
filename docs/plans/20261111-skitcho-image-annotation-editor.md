@@ -410,10 +410,10 @@
 - Modify: `Sources/SkitchoUI/Canvas/ToolController.swift`
 - Create: `Tests/SkitchoUITests/HandleTests.swift`
 
-- [ ] 8 resize handles + rotate handle for boxes/text/stamps, endpoint handles for arrow/line; marching ants; `blue` handles with `white` outline
-- [ ] handle drags via interactive gestures; keyboard: Delete, arrows nudge, Esc, ⌘]/⌘[
-- [ ] write tests: resize keeps the opposite corner fixed, an endpoint drag changes only that end, Shift rotate snaps 15°, each drag is one undo step
-- [ ] run tests. Must pass before task 19.
+- [x] 8 resize handles + rotate handle for boxes/text/stamps, endpoint handles for arrow/line; marching ants; `blue` handles with `white` outline
+- [x] handle drags via interactive gestures; keyboard: Delete, arrows nudge, Esc, ⌘]/⌘[
+- [x] write tests: resize keeps the opposite corner fixed, an endpoint drag changes only that end, Shift rotate snaps 15°, each drag is one undo step
+- [x] run tests. Must pass before task 19.
 
 ### Task 19: Text tool with in-place editing
 

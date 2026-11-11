@@ -4,7 +4,8 @@ import Foundation
 import SkitchoCore
 
 /// The V tool: click selects the top-most hit, drag moves the selection (one undo step), a drag on empty
-/// space draws a marquee that selects every element it fully contains. Panning is handled by the canvas
+/// space draws a marquee that selects every element it fully contains. A press on a handle of the single
+/// selected element resizes, rotates or moves an endpoint (one undo step per drag). Panning is handled by the canvas
 /// (Space-drag), not here.
 @MainActor
 public final class SelectPanToolController: ToolController {
@@ -18,6 +19,8 @@ public final class SelectPanToolController: ToolController {
     /// Press on an element; `originals` are the selected elements at gesture start.
     case moving(start: CGPoint, originals: [UUID: Element])
     case marquee(start: CGPoint, base: Set<UUID>)
+    /// Press on a handle of the single selected element; `original` is its state at gesture start.
+    case handle(Handle, original: Element)
   }
 
   private let editor: EditorModel
@@ -38,8 +41,25 @@ public final class SelectPanToolController: ToolController {
 
   private var tolerance: Double { Self.hitSlop / max(zoom(), 0.0001) }
 
+  /// The handle of the single selected element under `point`, if any.
+  func handle(at point: CGPoint) -> Handle? {
+    guard editor.selection.count == 1, let element = editor.selectedElements.first else { return nil }
+    return HandleLayout.hit(element, at: point, zoom: zoom())
+  }
+
+  /// True when a press at `point` manipulates the current selection: it lands on a handle of the single
+  /// selected element or on a selected element. Drawing tools use this for the selection rule.
+  func pressesSelection(at point: CGPoint) -> Bool {
+    handle(at: point) != nil
+      || editor.selectedElements.contains { $0.hitTest(point: point, tolerance: tolerance) }
+  }
+
   public func mouseDown(at point: CGPoint, modifiers: ToolModifiers) {
     didDrag = false
+    if !modifiers.contains(.shift), let handle = handle(at: point), let element = editor.selectedElements.first {
+      gesture = .handle(handle, original: element)
+      return
+    }
     if let hit = editor.topMostHit(at: point, tolerance: tolerance) {
       if modifiers.contains(.shift) {
         editor.toggleSelection(hit.id)
@@ -70,6 +90,16 @@ public final class SelectPanToolController: ToolController {
       editor.document.elements = editor.document.elements.map { element in
         originals[element.id].map { $0.translated(by: delta) } ?? element
       }
+    case .handle(let handle, let original):
+      if !didDrag {
+        didDrag = true
+        editor.beginInteractive()
+      }
+      let updated = HandleLayout.apply(handle, to: original, pointer: point, modifiers: modifiers)
+      if let index = editor.document.elements.firstIndex(where: { $0.id == original.id }) {
+        editor.document.elements[index] = updated
+      }
+      needsDisplay?()
     case .marquee(let start, let base):
       let rect = CGRect(
         x: min(start.x, point.x), y: min(start.y, point.y), width: abs(point.x - start.x),
@@ -82,7 +112,14 @@ public final class SelectPanToolController: ToolController {
   }
 
   public func mouseUp(at point: CGPoint, modifiers: ToolModifiers) {
-    if case .moving = gesture, didDrag { editor.commitInteractive(name: "Move") }
+    if didDrag {
+      switch gesture {
+      case .moving: editor.commitInteractive(name: "Move")
+      case .handle(let handle, _): editor.commitInteractive(name: HandleLayout.undoName(for: handle))
+      default: break
+      }
+      needsDisplay?()
+    }
     gesture = .none
     didDrag = false
     if marqueeRect != nil {
@@ -113,53 +150,18 @@ public final class SelectPanToolController: ToolController {
       guard !editor.selection.isEmpty else { return false }
       editor.nudgeSelection(dx: dx, dy: dy, large: modifiers.contains(.shift))
       return true
-    case .character:
-      return false
+    case .character(let character):
+      guard modifiers.contains(.command), !editor.selection.isEmpty else { return false }
+      switch character {
+      case "]": editor.bringForward()
+      case "[": editor.sendBackward()
+      default: return false
+      }
+      return true
     }
   }
 
   public func overlay(in context: CGContext, zoom: Double) {
     SelectionOverlay.draw(elements: editor.selectedElements, marquee: marqueeRect, in: context, zoom: zoom)
-  }
-}
-
-/// Draws selection outlines, handles and the marquee. Handles are blue with a white outline (CloudZone).
-enum SelectionOverlay {
-  static func draw(elements: [Element], marquee: CGRect?, in context: CGContext, zoom: Double) {
-    let blue = BrandColor.blue.nsColor().cgColor
-    let white = BrandColor.white.nsColor().cgColor
-    let px = 1 / max(zoom, 0.0001)
-    context.saveGState()
-    defer { context.restoreGState() }
-
-    for element in elements {
-      context.setStrokeColor(blue)
-      context.setLineWidth(1.5 * px)
-      context.stroke(element.bounds)
-    }
-    if elements.count == 1, let box = elements.first?.bounds {
-      let side = 8 * px
-      let points = [
-        CGPoint(x: box.minX, y: box.minY), CGPoint(x: box.midX, y: box.minY), CGPoint(x: box.maxX, y: box.minY),
-        CGPoint(x: box.minX, y: box.midY), CGPoint(x: box.maxX, y: box.midY),
-        CGPoint(x: box.minX, y: box.maxY), CGPoint(x: box.midX, y: box.maxY), CGPoint(x: box.maxX, y: box.maxY),
-      ]
-      for point in points {
-        let handle = CGRect(x: point.x - side / 2, y: point.y - side / 2, width: side, height: side)
-        context.setFillColor(blue)
-        context.fill(handle)
-        context.setStrokeColor(white)
-        context.setLineWidth(1.5 * px)
-        context.stroke(handle)
-      }
-    }
-    if let marquee {
-      context.setFillColor(BrandColor.blue.nsColor(alpha: 0.12).cgColor)
-      context.fill(marquee)
-      context.setStrokeColor(blue)
-      context.setLineWidth(1 * px)
-      context.setLineDash(phase: 0, lengths: [4 * px, 3 * px])
-      context.stroke(marquee)
-    }
   }
 }

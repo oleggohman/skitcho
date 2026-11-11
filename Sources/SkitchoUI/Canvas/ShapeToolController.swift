@@ -8,7 +8,7 @@ import SkitchoCore
 /// The element is created on the first drag past the threshold and updated live in the document (inside an
 /// interactive gesture), so the canvas renders the preview with the normal renderer. Mouse-up commits one
 /// undo step and selects the new element; a drag that stays below the minimum size creates nothing.
-/// Selection rule: a press on an already selected element manipulates the selection (move); anywhere else
+/// Selection rule: a press on a handle or an already selected element manipulates the selection (resize/rotate/move); anywhere else
 /// starts a new element, even on top of an unselected element.
 @MainActor
 public final class ShapeToolController: ToolController {
@@ -43,8 +43,6 @@ public final class ShapeToolController: ToolController {
   }
 
   public var cursor: NSCursor { ToolCursors.cursor(for: tool) }
-
-  private var tolerance: Double { SelectPanToolController.hitSlop / max(zoom(), 0.0001) }
 
   // MARK: Geometry
 
@@ -102,8 +100,7 @@ public final class ShapeToolController: ToolController {
     origin = nil
     elementID = nil
     manipulating = false
-    let selectedHit = editor.selectedElements.contains { $0.hitTest(point: point, tolerance: tolerance) }
-    if selectedHit {
+    if manipulator.pressesSelection(at: point) {
       manipulating = true
       manipulator.mouseDown(at: point, modifiers: modifiers)
       return

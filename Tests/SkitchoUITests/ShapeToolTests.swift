@@ -234,7 +234,7 @@ import struct SkitchoCore.Document
       style: Style.make(tool: .rect, sizeStep: .default, color: .red, imageSize: CGSize(width: 800, height: 600)))
     let (editor, manager) = makeEditor(elements: [existing])
     editor.select(existing.id)
-    drag(controller(editor, .ellipse), manager, from: CGPoint(x: 100, y: 150), to: CGPoint(x: 140, y: 170))
+    drag(controller(editor, .ellipse), manager, from: CGPoint(x: 125, y: 100), to: CGPoint(x: 165, y: 120))
     #expect(editor.document.elements.count == 1)
     guard case .rect(let rect, _) = editor.document.elements[0].kind else {
       Issue.record("expected rect")
