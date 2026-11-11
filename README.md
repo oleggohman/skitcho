@@ -2,7 +2,6 @@
 
 A fast, native macOS app for marking up pictures.
 
-[![CI](https://github.com/oleggohman/skitcho/actions/workflows/ci.yml/badge.svg)](https://github.com/oleggohman/skitcho/actions/workflows/ci.yml)
 [![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/oleggohman/skitcho/badge)](https://scorecard.dev/viewer/?uri=github.com/oleggohman/skitcho)
 [![Latest release](https://img.shields.io/github/v/release/oleggohman/skitcho)](https://github.com/oleggohman/skitcho/releases)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
