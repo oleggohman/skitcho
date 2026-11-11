@@ -49,6 +49,9 @@ public final class CanvasView: NSView {
   private var pixelateController: PixelateToolController?
   /// Options bar (block size, Apply/Cancel) shown below a pending pixelate region.
   private(set) var pixelateBar: NSHostingView<PixelateBar>?
+  private var cropController: CropToolController?
+  /// Options bar (W×H, expand edges, Apply/Cancel) shown below the canvas while the crop tool is active.
+  private(set) var cropBar: NSHostingView<CropBar>?
   /// The NSTextView shown over the canvas while a text element is edited.
   private(set) var textOverlay: TextEditorOverlay?
   private var spaceDown = false
@@ -80,6 +83,10 @@ public final class CanvasView: NSView {
     pixelate.stateDidChange = { [weak self] in self?.syncPixelateBar() }
     pixelateController = pixelate
     register(pixelate, for: .pixelate)
+    let crop = CropToolController(editor: editor, zoom: { box.value })
+    crop.stateDidChange = { [weak self] in self?.syncCropBar() }
+    cropController = crop
+    register(crop, for: .crop)
     updateFrameSize()
     observeEditor()
   }
@@ -102,6 +109,12 @@ public final class CanvasView: NSView {
   public func register(_ controller: some ToolController, for tool: Tool) {
     controller.needsDisplay = { [weak self] in self?.needsDisplay = true }
     controllers[tool] = controller
+    window?.invalidateCursorRects(for: self)
+  }
+
+  /// Removes the controller of `tool`, so it falls back to the V tool's (test seam and tool teardown).
+  public func unregister(_ tool: Tool) {
+    controllers[tool] = nil
     window?.invalidateCursorRects(for: self)
   }
 
@@ -135,6 +148,7 @@ public final class CanvasView: NSView {
     if frame.size != size { setFrameSize(size) }
     layoutTextOverlay()
     layoutPixelateBar()
+    layoutCropBar()
     needsDisplay = true
   }
 
@@ -188,6 +202,8 @@ public final class CanvasView: NSView {
     }
     if editor.currentTool != .text, let textController, textController.isEditing { textController.commit() }
     if editor.currentTool != .pixelate, pixelateController?.region != nil { pixelateController?.cancel() }
+    if editor.currentTool != .crop, cropController?.hasPendingRect == true { cropController?.cancel() }
+    syncCropBar()
     needsDisplay = true
     window?.invalidateCursorRects(for: self)
   }
@@ -267,6 +283,44 @@ public final class CanvasView: NSView {
     var y = bottomRight.y + Spacing.xs
     if y + size.height > bounds.maxY { y = max(topLeft.y - size.height - Spacing.xs, bounds.minY) }
     x = min(max(x, bounds.minX), max(bounds.maxX - size.width, bounds.minX))
+    hosting.frame = CGRect(origin: CGPoint(x: x.rounded(), y: y.rounded()), size: size)
+  }
+
+  // MARK: Crop options bar
+
+  /// Shows, updates or removes the crop bar: it is present exactly while the crop tool is current.
+  private func syncCropBar() {
+    guard let controller = cropController, editor.currentTool == .crop else {
+      cropBar?.removeFromSuperview()
+      cropBar = nil
+      return
+    }
+    let bar = CropBar(
+      width: controller.width, height: controller.height, canApply: controller.canApply,
+      errorMessage: controller.errorMessage,
+      onWidth: { [weak controller] in controller?.setWidth($0) },
+      onHeight: { [weak controller] in controller?.setHeight($0) },
+      onExpand: { [weak controller] in controller?.expand($0) },
+      onApply: { [weak controller] in controller?.apply() },
+      onCancel: { [weak controller] in controller?.cancel() })
+    if let hosting = cropBar {
+      hosting.rootView = bar
+    } else {
+      let hosting = NSHostingView(rootView: bar)
+      addSubview(hosting)
+      cropBar = hosting
+    }
+    layoutCropBar()
+  }
+
+  /// Centers the bar under the canvas (inside the view's bottom edge when there is no room below).
+  private func layoutCropBar() {
+    guard let hosting = cropBar else { return }
+    let size = hosting.fittingSize
+    let canvas = canvasGeometry.viewRect(canvasSize: editor.document.canvasSize)
+    var y = canvas.maxY + Spacing.xs
+    if y + size.height > bounds.maxY { y = max(bounds.maxY - size.height - Spacing.xs, bounds.minY) }
+    let x = min(max(canvas.midX - size.width / 2, bounds.minX), max(bounds.maxX - size.width, bounds.minX))
     hosting.frame = CGRect(origin: CGPoint(x: x.rounded(), y: y.rounded()), size: size)
   }
 

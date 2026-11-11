@@ -130,6 +130,8 @@ import struct SkitchoCore.Document
     let canvas = CanvasView(editor: editor)
     #expect(canvas.activeController is SelectPanToolController)
     editor.currentTool = .crop
+    // Every tool with a real controller is registered by default; drop crop's to exercise the fallback.
+    canvas.unregister(.crop)
     #expect(canvas.activeController is SelectPanToolController)
     let custom = controller(editor)
     canvas.register(custom, for: .crop)

@@ -452,10 +452,10 @@
 - Create: `Sources/SkitchoUI/Canvas/CropToolController.swift`, `Sources/SkitchoUI/Panels/CropBar.swift`
 - Create: `Tests/SkitchoUITests/CropToolTests.swift`
 
-- [ ] crop overlay: handles, rule-of-thirds grid, dim outside, W×H fields kept in sync with the rect; Apply/Cancel
-- [ ] expand-canvas edge buttons (+64 px per click) shown in crop mode
-- [ ] write tests: fields ↔ rect sync, apply crop is undoable, expand grows the canvas on the chosen edge
-- [ ] run tests. Must pass before task 23.
+- [x] crop overlay: handles, rule-of-thirds grid, dim outside, W×H fields kept in sync with the rect; Apply/Cancel
+- [x] expand-canvas edge buttons (+64 px per click) shown in crop mode (in the crop bar)
+- [x] write tests: fields ↔ rect sync, apply crop is undoable, expand grows the canvas on the chosen edge
+- [x] run tests. Must pass before task 23.
 
 ### Task 23: Resize, rotate and flip
 
