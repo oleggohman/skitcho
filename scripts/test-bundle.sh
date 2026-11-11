@@ -57,6 +57,17 @@ while IFS= read -r -d '' f; do
 done < <(find "$APP" -type f -print0)
 [[ "$macho" -ge 1 ]] || fail "no Mach-O in bundle"
 
+[[ -d "$APP/Contents/Frameworks/Sparkle.framework" ]] || fail "Sparkle.framework not embedded"
+otool -l "$APP/Contents/MacOS/Skitcho" | grep -q '@executable_path/../Frameworks' ||
+  fail "missing @executable_path/../Frameworks rpath"
+if otool -l "$APP/Contents/MacOS/Skitcho" | awk '/cmd LC_RPATH/{r=1} r && $1=="path"{print $2; r=0}' | grep -q '^/'; then
+  fail "absolute rpath left in executable"
+fi
+xpc="$(find "$APP" -name XPCServices -print)"
+[[ -z "$xpc" ]] || fail "XPCServices present: $xpc"
+selftest="$("$APP/Contents/MacOS/Skitcho" --self-test)" || fail "--self-test exited non-zero"
+[[ "$selftest" == "ok" ]] || fail "--self-test printed '$selftest', expected 'ok'"
+
 codesign --verify --deep --strict "$APP" || fail "codesign verification failed"
 
 # No font files in the repo sources or the bundle (system fonts only).

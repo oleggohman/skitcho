@@ -45,11 +45,44 @@ for b in "$BIN_DIR"/*.bundle; do
 done
 shopt -u nullglob
 
-if [[ -n "${SIGN_IDENTITY:-}" ]]; then
-  codesign -f -s "$SIGN_IDENTITY" -o runtime --timestamp "$APP"
-else
-  codesign -f -s - "$APP"
-fi
+# 1. Embed Sparkle (ditto keeps the Versions/Current symlinks); no headers, dSYMs or PackageFrameworks.
+FW="$APP/Contents/Frameworks/Sparkle.framework"
+mkdir -p "$APP/Contents/Frameworks"
+ditto "$BIN_DIR/Sparkle.framework" "$FW"
+# Dangling symlinks fail codesign --strict, so remove both the top-level links and Versions/B copies.
+for d in Headers PrivateHeaders Modules; do
+  rm -rf "${FW:?}/$d" "${FW:?}/Versions/B/$d"
+done
+
+# 2. XPC services are only needed by sandboxed apps; Skitcho is not sandboxed.
+rm -rf "$FW/Versions/B/XPCServices" "$FW/XPCServices"
+
+# 3. Thin the Sparkle Mach-Os to arm64 in place.
+for m in Sparkle Autoupdate Updater.app/Contents/MacOS/Updater; do
+  lipo -thin arm64 "$FW/Versions/B/$m" -output "$FW/Versions/B/$m"
+done
+
+# 4. Resolve Sparkle through the bundle and drop absolute toolchain rpaths.
+EXE="$APP/Contents/MacOS/Skitcho"
+install_name_tool -add_rpath @executable_path/../Frameworks "$EXE"
+while IFS= read -r rp; do
+  [[ "$rp" == /* ]] && install_name_tool -delete_rpath "$rp" "$EXE"
+done < <(otool -l "$EXE" | awk '/cmd LC_RPATH/{r=1} r && $1=="path"{print $2; r=0}')
+
+# 5. Sign inside-out (never --deep when signing).
+sign() {
+  if [[ -n "${SIGN_IDENTITY:-}" ]]; then
+    codesign -f -s "$SIGN_IDENTITY" -o runtime --timestamp "$@"
+  else
+    codesign -f -s - "$@"
+  fi
+}
+sign "$FW/Versions/B/Autoupdate"
+sign "$FW/Versions/B/Updater.app"
+sign "$FW"
+sign "$APP"
+
+# 6. Verify.
 codesign --verify --deep --strict "$APP"
 
 # Assert every Mach-O in the app is thin arm64.

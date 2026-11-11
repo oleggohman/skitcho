@@ -532,23 +532,23 @@
 - Modify: `Sources/Skitcho/SkitchoApp.swift`, `Sources/Skitcho/Commands.swift`, `Resources/Info.plist.template`, `Package.swift`, `scripts/bundle.sh`, `scripts/test-bundle.sh`
 - Create: `Tests/SkitchoAppTests/UpdaterTests.swift`
 
-- [ ] `UpdaterController` wraps `SPUStandardUpdaterController`. "Check for Updates…" is bound to `canCheckForUpdates`. Settings has a single "Automatically check for updates" toggle; the interval is the Info.plist daily default
-- [ ] dev builds (empty `SUPublicEDKey`) do not start the updater; the menu item is disabled with the help text "Updates are disabled in development builds"
-- [ ] add a `--self-test` launch argument handled before SwiftUI starts: `@main enum Entry` checks `CommandLine.arguments` for `--self-test` and, if present, touches Sparkle (`SPUUpdater` type metadata), prints `ok` and returns; otherwise it calls `SkitchoApp.main()`. `SkitchoApp` loses its own `@main`
-- [ ] `bundle.sh` Sparkle embedding, exactly in this order:
+- [x] `UpdaterController` wraps `SPUStandardUpdaterController`. "Check for Updates…" is bound to `canCheckForUpdates`. Settings has a single "Automatically check for updates" toggle; the interval is the Info.plist daily default
+- [x] dev builds (empty `SUPublicEDKey`) do not start the updater; the menu item is disabled with the help text "Updates are disabled in development builds"
+- [x] add a `--self-test` launch argument handled before SwiftUI starts: `@main enum Entry` checks `CommandLine.arguments` for `--self-test` and, if present, touches Sparkle (`SPUUpdater` type metadata), prints `ok` and returns; otherwise it calls `SkitchoApp.main()`. `SkitchoApp` loses its own `@main`
+- [x] `bundle.sh` Sparkle embedding, exactly in this order:
   1. `ditto "$BIN_DIR/Sparkle.framework" Contents/Frameworks/Sparkle.framework` (keeps `Versions/Current` symlinks); then remove `Headers`, `PrivateHeaders`, `Modules` **both** as top-level symlinks and as `Versions/B/` directories (dangling symlinks fail `codesign --strict`); copy no `*.dSYM` and no `PackageFrameworks`
   2. delete `Sparkle.framework/Versions/B/XPCServices` (only needed by sandboxed apps; Skitcho is not sandboxed)
   3. `lipo -thin arm64 X -output X` in place on `Versions/B/Sparkle`, `Versions/B/Autoupdate`, `Versions/B/Updater.app/Contents/MacOS/Updater`
   4. `install_name_tool -add_rpath @executable_path/../Frameworks Contents/MacOS/Skitcho`, and `-delete_rpath` any absolute toolchain path found by `otool -l`
   5. sign inside-out with `codesign -f` (never `--deep` when signing), adding `-o runtime --timestamp` when `$SIGN_IDENTITY` is set. Order: `Autoupdate` → `Updater.app` → `Sparkle.framework` → `Skitcho.app`
   6. verify: `codesign --verify --deep --strict`, then the arm64 `lipo -archs` loop over every Mach-O
-- [ ] `test-bundle.sh` additionally asserts:
+- [x] `test-bundle.sh` additionally asserts:
   - `otool -l Contents/MacOS/Skitcho` contains `@executable_path/../Frameworks`
   - no `XPCServices` directory
   - `build/Skitcho.app/Contents/MacOS/Skitcho --self-test` prints `ok` and exits 0, which proves Sparkle loads through the rpath
-- [ ] `Package.swift`: add test target `SkitchoAppTests` depending on `Skitcho`
-- [ ] write tests (`@testable import Skitcho`): empty key → `isEnabled == false`, the feed URL constant, the automatic-check toggle persists to Sparkle's `SUEnableAutomaticChecks` default
-- [ ] run tests + test-bundle. Must pass before task 29.
+- [x] `Package.swift`: add test target `SkitchoAppTests` depending on `Skitcho`
+- [x] write tests (`@testable import Skitcho`): empty key → `isEnabled == false`, the feed URL constant, the automatic-check toggle persists to Sparkle's `SUEnableAutomaticChecks` default
+- [x] run tests + test-bundle. Must pass before task 29.
 
 ### Task 29: App icon generator
 

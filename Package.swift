@@ -23,5 +23,6 @@ let package = Package(
     ),
     .testTarget(name: "SkitchoCoreTests", dependencies: ["SkitchoCore"]),
     .testTarget(name: "SkitchoUITests", dependencies: ["SkitchoUI", "SkitchoCore"]),
+    .testTarget(name: "SkitchoAppTests", dependencies: ["Skitcho"]),
   ]
 )

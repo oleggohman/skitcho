@@ -6,6 +6,7 @@ import SwiftUI
 /// The menu bar. Commands act on the key window's editor through the `editorCommands` focused value; the
 /// enablement rules live in `EditorCommandModel`. Undo/Redo, New, Open and Save come from `DocumentGroup`.
 struct SkitchoCommands: Commands {
+  let updater: UpdaterController
   @FocusedValue(\.editorCommands) private var editor
   @Environment(\.newDocument) private var newDocument
   @Environment(\.openWindow) private var openWindow
@@ -13,6 +14,9 @@ struct SkitchoCommands: Commands {
   var body: some Commands {
     CommandGroup(replacing: .appInfo) {
       Button("About Skitcho") { openWindow(id: AboutView.windowID) }
+      Button("Check for Updates…") { updater.checkForUpdates() }
+        .disabled(!updater.isEnabled || !updater.canCheckForUpdates)
+        .help(updater.isEnabled ? "" : UpdaterController.disabledHelp)
     }
 
     CommandGroup(after: .newItem) {
