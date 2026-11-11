@@ -8,6 +8,8 @@ public enum ImageImportError: Error, Equatable {
   case unreadable
   /// The image decodes but has no pixels.
   case zeroSize
+  /// A side is longer than `ImageOps.maxSide` pixels (checked from the header, before decoding).
+  case tooLarge
 }
 
 /// The single image-decoding path: decodes bytes, applies the EXIF orientation and converts to sRGB RGBA8.
@@ -25,6 +27,8 @@ public enum ImageImporter {
       if properties == nil { throw ImageImportError.unreadable }
       throw ImageImportError.zeroSize
     }
+    // Reject oversized images before the decoder allocates them (a tiny file can declare a huge size).
+    guard pixelWidth <= ImageOps.maxSide, pixelHeight <= ImageOps.maxSide else { throw ImageImportError.tooLarge }
     // The thumbnail API applies the orientation transform; a max size of the long side keeps full resolution.
     let options: [CFString: Any] = [
       kCGImageSourceCreateThumbnailFromImageAlways: true,

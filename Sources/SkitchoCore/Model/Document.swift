@@ -41,12 +41,15 @@ public struct Document: Sendable, Equatable {
       && lhs.background == rhs.background && lhs.elements == rhs.elements && lhs.version == rhs.version
   }
 
-  /// A blank canvas filled with `background`.
+  /// A blank canvas filled with `background`. Each side is clamped to 1...`ImageOps.maxSide` (non-finite: 1).
   public static func blank(
     size: CGSize = CGSize(width: 800, height: 600), background: AnnotationColor = .white
   ) -> Document {
-    let width = max(1, Int(size.width))
-    let height = max(1, Int(size.height))
+    func side(_ value: Double) -> Int {
+      value.isFinite ? Int(min(max(value, 1), Double(ImageOps.maxSide))) : 1
+    }
+    let width = side(size.width)
+    let height = side(size.height)
     let space = CGColorSpace(name: CGColorSpace.sRGB)!
     let info = CGImageAlphaInfo.premultipliedLast.rawValue
     let context = CGContext(

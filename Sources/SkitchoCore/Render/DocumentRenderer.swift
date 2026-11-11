@@ -4,6 +4,8 @@ import Foundation
 public enum RenderError: Error, Equatable {
   case contextCreationFailed
   case imageCreationFailed
+  /// The output size is not finite or exceeds `DocumentRenderer.maxOutputSide`.
+  case invalidSize
 }
 
 /// Draws a `Document` into a CoreGraphics context. This is the only code that bridges the top-left, y-down
@@ -12,6 +14,8 @@ public enum RenderError: Error, Equatable {
 public enum DocumentRenderer {
   /// Alpha of the highlighter stroke (drawn with the multiply blend mode).
   public static let highlighterAlpha = 0.4
+  /// Longest side `flatten` renders: the largest canvas (`ImageOps.maxSide`) exported at scale 2.
+  public static let maxOutputSide = 2 * ImageOps.maxSide
 
   /// Draws background, base image and elements into `context`.
   /// - Parameters:
@@ -45,8 +49,15 @@ public enum DocumentRenderer {
 
   /// Renders the whole document into a new sRGB RGBA8 premultiplied image of `canvasSize * scale` pixels.
   public static func flatten(_ document: Document, scale: Double = 1) throws -> CGImage {
-    let width = max(1, Int((document.canvasSize.width * scale).rounded()))
-    let height = max(1, Int((document.canvasSize.height * scale).rounded()))
+    let limit = Double(maxOutputSide)
+    let scaledWidth = (document.canvasSize.width * scale).rounded()
+    let scaledHeight = (document.canvasSize.height * scale).rounded()
+    // Checked before `Int(...)`, which traps on non-finite or out-of-range values.
+    guard scaledWidth.isFinite, scaledHeight.isFinite, scaledWidth <= limit, scaledHeight <= limit else {
+      throw RenderError.invalidSize
+    }
+    let width = max(1, Int(scaledWidth))
+    let height = max(1, Int(scaledHeight))
     guard let space = CGColorSpace(name: CGColorSpace.sRGB),
       let context = CGContext(
         data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: 0, space: space,

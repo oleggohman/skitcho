@@ -54,6 +54,33 @@ import Testing
     #expect(back.baseImage.width == 64 && back.baseImage.height == 48)
   }
 
+  @Test func packageRoundTripKeepsEveryPixel() throws {
+    // Opaque pixels that all differ, so any codec change to the bitmap shows up (alpha 255 avoids
+    // premultiplication rounding).
+    let width = 23
+    let height = 17
+    let context = makeContext(width: width, height: height)
+    let data = context.data!.assumingMemoryBound(to: UInt8.self)
+    for y in 0..<height {
+      for x in 0..<width {
+        let i = y * context.bytesPerRow + x * 4
+        data[i] = UInt8((x * 11 + y * 3) % 256)
+        data[i + 1] = UInt8((y * 15 + x) % 256)
+        data[i + 2] = UInt8((x * y * 7) % 256)
+        data[i + 3] = 255
+      }
+    }
+    let doc = Document(baseImage: context.makeImage()!)
+    let back = try PackageCodec.document(from: PackageCodec.wrapper(for: doc))
+    let (expected, actual) = (PixelReader(doc.baseImage), PixelReader(back.baseImage))
+    #expect(back.baseImage.width == width && back.baseImage.height == height)
+    for y in 0..<height {
+      for x in 0..<width where actual.pixel(x, y) != expected.pixel(x, y) {
+        Issue.record("pixel (\(x), \(y)): \(actual.pixel(x, y)) vs \(expected.pixel(x, y))")
+      }
+    }
+  }
+
   @Test func packageRoundTripsThroughTempDirectory() throws {
     var doc = Document.blank(size: CGSize(width: 16, height: 16))
     doc.elements = Self.sampleElements()

@@ -22,7 +22,7 @@ public enum ElementClipboard {
   /// Decodes data written by `encode`. Returns nil for anything unreadable, empty or from a newer version.
   public static func decode(_ data: Data) -> [Element]? {
     guard let payload = try? JSONDecoder().decode(Payload.self, from: data),
-      payload.version <= currentVersion, !payload.elements.isEmpty
+      (1...currentVersion).contains(payload.version), !payload.elements.isEmpty
     else { return nil }
     return payload.elements
   }

@@ -36,7 +36,8 @@ public enum PackageCodec {
       version: Document.currentVersion, canvasWidth: document.canvasSize.width,
       canvasHeight: document.canvasSize.height, imageOriginX: document.imageOrigin.x,
       imageOriginY: document.imageOrigin.y, background: document.background, elements: document.elements)
-    let json = try JSONEncoder().encode(payload)
+    // Non-finite geometry cannot be written as JSON; report it as a codec error, not a raw EncodingError.
+    guard let json = try? JSONEncoder().encode(payload) else { throw PackageCodecError.encodingFailed }
     let png = try pngData(document.baseImage)
     let dir = FileWrapper(directoryWithFileWrappers: [:])
     let jsonFile = FileWrapper(regularFileWithContents: json)
@@ -55,7 +56,13 @@ public enum PackageCodec {
     let decoder = JSONDecoder()
     guard let header = try? decoder.decode(Header.self, from: jsonData) else { throw PackageCodecError.corruptJSON }
     guard header.version <= Document.currentVersion else { throw PackageCodecError.unsupportedVersion(header.version) }
+    guard header.version >= 1 else { throw PackageCodecError.corruptJSON }
     guard let payload = try? decoder.decode(Payload.self, from: jsonData) else { throw PackageCodecError.corruptJSON }
+    // The file is untrusted: the canvas must be a drawable size and the origin finite, or rendering traps.
+    let limit = Double(ImageOps.maxSide)
+    guard (1...limit).contains(payload.canvasWidth), (1...limit).contains(payload.canvasHeight),
+      payload.imageOriginX.isFinite, payload.imageOriginY.isFinite
+    else { throw PackageCodecError.corruptJSON }
     let image: CGImage
     do {
       image = try ImageImporter.decodeImage(pngData)

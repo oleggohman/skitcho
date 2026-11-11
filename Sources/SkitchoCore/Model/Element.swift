@@ -118,8 +118,10 @@ public struct Element: Sendable, Equatable, Codable, Identifiable {
 
   // MARK: Transforms
 
-  /// A copy moved by `delta`.
+  /// A copy moved by `delta`. A non-finite delta returns the element unchanged (NaN geometry breaks
+  /// equality and cannot be saved as JSON).
   public func translated(by delta: CGPoint) -> Element {
+    guard delta.x.isFinite, delta.y.isFinite else { return self }
     var copy = self
     copy.kind = mapGeometry({ $0 + delta }, size: { $0 })
     return copy
@@ -127,7 +129,9 @@ public struct Element: Sendable, Equatable, Codable, Identifiable {
 
   /// A copy whose geometry is scaled by `factor` about `anchor`. Rotation and style are left alone;
   /// callers that resize the image scale the style separately with `Style.scaled(by:)`.
+  /// A non-finite factor or anchor returns the element unchanged.
   public func scaled(by factor: Double, about anchor: CGPoint) -> Element {
+    guard factor.isFinite, anchor.x.isFinite, anchor.y.isFinite else { return self }
     var copy = self
     copy.kind = mapGeometry(
       { CGPoint(x: anchor.x + ($0.x - anchor.x) * factor, y: anchor.y + ($0.y - anchor.y) * factor) },

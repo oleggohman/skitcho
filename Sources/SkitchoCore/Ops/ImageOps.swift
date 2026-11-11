@@ -43,6 +43,8 @@ public enum ImageOps {
     let image = document.baseImage
     let local = rect.offsetBy(dx: -document.imageOrigin.x, dy: -document.imageOrigin.y)
     let region = try pixelRegion(of: local, within: image.width, image.height)
+    // A block larger than the region averages the same pixels; clamping keeps `blockY + block` from overflowing.
+    let block = min(blockSize, max(region.width, region.height))
 
     let context = try makeContext(width: image.width, height: image.height)
     context.draw(image, in: CGRect(x: 0, y: 0, width: image.width, height: image.height))
@@ -51,10 +53,10 @@ public enum ImageOps {
 
     var blockY = region.minY
     while blockY < region.maxY {
-      let blockMaxY = min(blockY + blockSize, region.maxY)
+      let blockMaxY = min(blockY + block, region.maxY)
       var blockX = region.minX
       while blockX < region.maxX {
-        let blockMaxX = min(blockX + blockSize, region.maxX)
+        let blockMaxX = min(blockX + block, region.maxX)
         let count = (blockMaxX - blockX) * (blockMaxY - blockY)
         var sums = [Int](repeating: 0, count: 4)
         for y in blockY..<blockMaxY {
@@ -126,6 +128,8 @@ public enum ImageOps {
   /// untouched (`imageOrigin` moves); elements shift when the new space is added above or to the left.
   public static func expandCanvas(_ document: Document, edge: CanvasEdge, amount: Int) throws -> Document {
     guard amount >= 1 else { throw ImageOpError.invalidArgument }
+    // Checked before the addition below so a huge amount cannot overflow.
+    guard amount <= maxSide else { throw ImageOpError.tooLarge }
     let canvas = try canvasPixels(of: document)
     let horizontal = edge == .left || edge == .right
     let newWidth = canvas.width + (horizontal ? amount : 0)
