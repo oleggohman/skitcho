@@ -42,6 +42,8 @@ public final class CanvasView: NSView {
 
   public let editor: EditorModel
   public private(set) var zoom: Double = 1
+  /// Called after every zoom change so the shell can show the zoom level.
+  public var onZoomChange: ((Double) -> Void)?
 
   private var controllers: [Tool: any ToolController] = [:]
   private let selectController: SelectPanToolController
@@ -159,6 +161,7 @@ public final class CanvasView: NSView {
     zoomBox.value = zoom
     updateFrameSize()
     window?.invalidateCursorRects(for: self)
+    onZoomChange?(zoom)
   }
 
   public func zoomIn() { setZoom(zoom * Self.zoomStep) }
@@ -471,8 +474,15 @@ public final class CanvasView: NSView {
 /// Scroll view that tells its canvas to re-size and re-center whenever the viewport changes.
 @MainActor
 final class CanvasScrollView: NSScrollView {
+  /// The canvas is fitted to the viewport once, on the first layout that has a real size.
+  private var didInitialFit = false
+
   override func layout() {
     super.layout()
+    if !didInitialFit, contentSize.width > 0, contentSize.height > 0, let canvas = documentView as? CanvasView {
+      didInitialFit = true
+      canvas.zoomToFit()
+    }
     (documentView as? CanvasView)?.updateFrameSize()
   }
 }

@@ -476,10 +476,10 @@
 - Create: `Sources/SkitchoUI/Panels/EditorWindowView.swift`
 - Create: `Tests/SkitchoUITests/DocumentTests.swift`
 
-- [ ] `EditorWindowView` uses the CloudZone two-column layout: the tool palette area on the left, the canvas in the center (rounded, `paleBlue`), properties on the right and the bottom bar. It binds `@Environment(\.undoManager)` into `EditorModel`
-- [ ] an opened plain image is untitled-like (first ⌘S → `.skitcho` save panel; the source is never overwritten)
-- [ ] write tests: snapshot/fileWrapper round-trip with elements, image-opened documents report `.skitchoDocument` as the save type, undo registrations mark the document dirty (via the manager)
-- [ ] run tests. Must pass before task 25.
+- [x] `EditorWindowView` uses the CloudZone two-column layout: the tool palette area on the left, the canvas in the center (rounded, `paleBlue`), properties on the right and the bottom bar. It binds `@Environment(\.undoManager)` into `EditorModel`
+- [x] an opened plain image is untitled-like (first ⌘S → `.skitcho` save panel; the source is never overwritten)
+- [x] write tests: snapshot/fileWrapper round-trip with elements, image-opened documents report `.skitchoDocument` as the save type, undo registrations mark the document dirty (via the manager)
+- [x] run tests. Must pass before task 25. (UI 163 + Core 165 pass; lint, test-bundle ok)
 
 ### Task 25: Tool palette and properties panel
 
