@@ -432,9 +432,9 @@
 - Create: `Sources/SkitchoUI/Canvas/StampToolController.swift`
 - Create: `Tests/SkitchoUITests/StampToolTests.swift`
 
-- [ ] a click places the current stamp kind; dragging sets the tail angle; "Attach Label" creates a linked text positioned beside the stamp
-- [ ] write tests: tail angle from the drag vector, a click without drag has no tail, the label link survives a move
-- [ ] run tests. Must pass before task 21.
+- [x] a click places the current stamp kind; dragging sets the tail angle; "Attach Label" creates a linked text positioned beside the stamp
+- [x] write tests: tail angle from the drag vector, a click without drag has no tail, the label link survives a move
+- [x] run tests. Must pass before task 21.
 
 ### Task 21: Pixelate tool
 

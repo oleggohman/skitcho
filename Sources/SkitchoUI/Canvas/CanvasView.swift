@@ -71,6 +71,7 @@ public final class CanvasView: NSView {
     text.editingDidChange = { [weak self] in self?.syncTextOverlay() }
     textController = text
     register(text, for: .text)
+    register(StampToolController(editor: editor, zoom: { box.value }, labelEditor: text), for: .stamp)
     updateFrameSize()
     observeEditor()
   }

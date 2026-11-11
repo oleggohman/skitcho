@@ -19,6 +19,8 @@ public final class EditorModel {
   public var nextSizeStep: SizeStep = .default
   public var nextTextStyled = true
   public var nextDoubleHeaded = false
+  /// The stamp the stamp tool places next.
+  public var nextStampKind: StampKind = .approve
 
   /// Snapshot taken by `beginInteractive`; nil when no gesture is running.
   private var interactiveStart: Document?
