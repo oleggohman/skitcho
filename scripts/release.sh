@@ -3,7 +3,8 @@
 # Usage: scripts/release.sh VERSION [--dry-run]
 # Env: SIGN_IDENTITY, SPARKLE_PUBLIC_ED_KEY (read by bundle.sh), SPARKLE_ED_PRIVATE_KEY (appcast signing),
 #      ASC_KEY_PATH, AppleStoreAPIKey, AppleIssuerID (notarization, skipped with --dry-run),
-#      APPCAST_URL (published feed used for merging and the version guards; tests point it at a file:// fixture).
+#      APPCAST_URL (published feed used for merging and the version guards; tests point it at a file:// fixture),
+#      FIRST_RELEASE=1 (required when no feed is published yet: only then is a 404 for the feed accepted).
 # --dry-run signs ad-hoc and skips notarization. Requires openssl@3 (ed25519) to check the Sparkle key pair.
 # Secrets are only read from the environment and never printed. Do not add xtrace.
 set -euo pipefail
@@ -24,9 +25,12 @@ if [[ $# -eq 2 ]]; then
   DRY_RUN=1
 fi
 [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || fail "VERSION must match X.Y.Z (got '$VERSION')"
-if [[ "${GITHUB_ACTIONS:-}" == "true" && "${GITHUB_REF_NAME:-}" != "v$VERSION" ]]; then
+# A real release in CI must come from its own tag; a dry-run (CI on branches and PRs) builds any version.
+if [[ "$DRY_RUN" == 0 && "${GITHUB_ACTIONS:-}" == "true" && "${GITHUB_REF_NAME:-}" != "v$VERSION" ]]; then
   fail "GITHUB_REF_NAME '${GITHUB_REF_NAME:-}' does not match v$VERSION"
 fi
+FIRST_RELEASE="${FIRST_RELEASE:-}"
+[[ -z "$FIRST_RELEASE" || "$FIRST_RELEASE" == 1 ]] || fail "FIRST_RELEASE must be unset or 1 (got '$FIRST_RELEASE')"
 
 APP="$ROOT/build/Skitcho.app"
 DIST="$ROOT/dist"
@@ -43,7 +47,8 @@ WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
 
 # ---------------------------------------------------------------------------------------------------
-# Preflight: everything that can doom the release is checked before building or contacting Apple.
+# Preflight: the inputs, the signing identity and the published feed are checked before building or
+# contacting Apple. The notarization credentials themselves can only be checked by notarytool, after the build.
 # ---------------------------------------------------------------------------------------------------
 [[ -n "${SPARKLE_ED_PRIVATE_KEY:-}" ]] || fail "SPARKLE_ED_PRIVATE_KEY is not set"
 PUBLIC_KEY="${SPARKLE_PUBLIC_ED_KEY:-}"
@@ -77,6 +82,11 @@ if [[ "$DRY_RUN" == 0 ]]; then
   : "${ASC_KEY_PATH:?ASC_KEY_PATH is not set}" "${AppleStoreAPIKey:?AppleStoreAPIKey is not set}" \
     "${AppleIssuerID:?AppleIssuerID is not set}"
   [[ -f "$ASC_KEY_PATH" ]] || fail "ASC_KEY_PATH does not point to a file"
+  # -v lists only valid identities (an expired or revoked certificate is missing). Output captured first:
+  # grep -q on a pipe could SIGPIPE the producer under pipefail.
+  identities="$(security find-identity -v -p codesigning 2>/dev/null || true)"
+  grep -qF -- "$SIGN_IDENTITY" <<<"$identities" ||
+    fail "SIGN_IDENTITY is not a valid code signing identity in the keychain search list"
 else
   SIGN_IDENTITY="" # dry-run is always ad-hoc signed
 fi
@@ -93,8 +103,9 @@ else
   BUILD_NUMBER="0"
 fi
 
-# The published appcast keeps older versions in the feed. Only 200 (merge) and 404 (first release) are
-# accepted; any other answer or a network failure aborts, so the feed is never silently reset.
+# The published appcast keeps older versions in the feed. 200 merges it. 404 is accepted only with
+# FIRST_RELEASE=1: GitHub also answers 404 when the latest release lacks appcast.xml, and dropping the feed
+# would lose the update history and skip the version guards. Anything else aborts; the feed is never reset.
 rm -rf "$DIST"
 mkdir -p "$DIST"
 if [[ "$APPCAST_URL" == file://* ]]; then
@@ -106,10 +117,15 @@ else
     200) ;;
     404)
       rm -f "$DIST/appcast.xml"
-      echo "no published appcast (first release)"
+      [[ "$FIRST_RELEASE" == 1 ]] ||
+        fail "$APPCAST_URL returned 404; set FIRST_RELEASE=1 only if no release with an appcast exists yet"
+      echo "no published appcast (FIRST_RELEASE=1)"
       ;;
     *) fail "fetching $APPCAST_URL returned HTTP $code" ;;
   esac
+fi
+if [[ -f "$DIST/appcast.xml" && "$FIRST_RELEASE" == 1 ]]; then
+  fail "FIRST_RELEASE=1 but a feed is published at $APPCAST_URL; unset it"
 fi
 if [[ -f "$DIST/appcast.xml" ]]; then
   xmllint --noout "$DIST/appcast.xml" || fail "published appcast.xml does not parse"

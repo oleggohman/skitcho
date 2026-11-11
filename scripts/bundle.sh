@@ -69,7 +69,8 @@ done
 # 4. Resolve Sparkle through the bundle and drop absolute toolchain rpaths.
 EXE="$APP/Contents/MacOS/Skitcho"
 rpaths() { otool -l "$EXE" | awk '/cmd LC_RPATH/{r=1} r && $1=="path"{print $2; r=0}'; }
-if ! rpaths | grep -qxF '@executable_path/../Frameworks'; then
+# Captured first: grep -q on a pipe could SIGPIPE the producer and fail the pipeline under pipefail.
+if ! grep -qxF '@executable_path/../Frameworks' <<<"$(rpaths)"; then
   install_name_tool -add_rpath @executable_path/../Frameworks "$EXE"
 fi
 while IFS= read -r rp; do

@@ -33,6 +33,7 @@ if [[ "${1:-}" == "--release-dry-run" ]]; then
   OTHER_PUB="$("$OPENSSL" pkey -in "$WORK/other.pem" -pubout -outform DER | tail -c 32 | base64)"
 
   DRY_VERSION="9.9.9"
+  unset FIRST_RELEASE # only the cases below set it
   # Hermetic feed: a fixture stands in for the published appcast (never the production URL).
   fixture() { # $1 = sparkle:version, $2 = shortVersionString; prints a file:// URL
     cat >"$WORK/appcast-$1-$2.xml" <<XML
@@ -53,7 +54,9 @@ if [[ "${1:-}" == "--release-dry-run" ]]; then
 XML
     echo "file://$WORK/appcast-$1-$2.xml"
   }
-  run_release() { # $1 = public key, $2 = appcast URL; output goes to $WORK/release.log
+  # $1 = public key, $2 = appcast URL; output goes to $WORK/release.log. Env prefixes on the call (GITHUB_*,
+  # FIRST_RELEASE) reach release.sh.
+  run_release() {
     SPARKLE_ED_PRIVATE_KEY="$(cat "$WORK/seed")" SPARKLE_PUBLIC_ED_KEY="$1" SIGN_IDENTITY="" APPCAST_URL="$2" \
       "$ROOT/scripts/release.sh" "$DRY_VERSION" --dry-run >"$WORK/release.log" 2>&1
   }
@@ -80,9 +83,23 @@ XML
   expect_reject "a version not above the feed" "is not greater than published version" \
     "$PUB" "$(fixture 1 10.0.0)"
   expect_reject "an unreadable feed" "cannot read" "$PUB" "file://$WORK/missing.xml"
+  FIRST_RELEASE=1 expect_reject "FIRST_RELEASE=1 with a published feed" "FIRST_RELEASE=1 but a feed is published" \
+    "$PUB" "$OLD_FEED"
+  FIRST_RELEASE=yes expect_reject "a FIRST_RELEASE other than 1" "FIRST_RELEASE must be unset or 1" \
+    "$PUB" "$OLD_FEED"
+  # A real (non dry-run) release in CI must run from its own tag; this fails before reading any secret.
+  if GITHUB_ACTIONS=true GITHUB_REF_NAME=feature/x "$ROOT/scripts/release.sh" "$DRY_VERSION" >"$WORK/release.log" 2>&1; then
+    fail "release.sh accepted a CI release from a branch"
+  fi
+  grep -qF "does not match v$DRY_VERSION" "$WORK/release.log" || {
+    cat "$WORK/release.log" >&2
+    fail "CI release from a branch: missing 'does not match v$DRY_VERSION'"
+  }
+  echo "ok: preflight rejects a CI release whose ref is not the version tag"
 
+  # The dry-run itself runs in CI on branches and PRs, so a non-tag ref must not stop it.
   rm -rf "$ROOT/dist"
-  if ! run_release "$PUB" "$OLD_FEED"; then
+  if ! GITHUB_ACTIONS=true GITHUB_REF_NAME=feature/x run_release "$PUB" "$OLD_FEED"; then
     cat "$WORK/release.log" >&2
     fail "release.sh --dry-run failed"
   fi
@@ -94,7 +111,8 @@ XML
   [[ -f "$APPCAST" ]] || fail "missing appcast.xml"
   extra="$(find "$ROOT/dist" -mindepth 1 ! -name "Skitcho-$DRY_VERSION.dmg" ! -name appcast.xml -print)"
   [[ -z "$extra" ]] || fail "unexpected files in dist: $extra"
-  hdiutil imageinfo "$DMG" 2>/dev/null | grep -q 'Format: UDZO' || fail "dmg: not a UDZO image"
+  dmg_info="$(hdiutil imageinfo "$DMG" 2>/dev/null)" || fail "dmg: hdiutil imageinfo failed"
+  grep -q 'Format: UDZO' <<<"$dmg_info" || fail "dmg: not a UDZO image"
   echo "ok: dmg is UDZO"
 
   # The DMG mounts read-only and holds an arm64-only, validly signed app plus the Applications link.
@@ -208,9 +226,12 @@ done < <(find "$APP" -type f -print0)
 [[ "$macho" -ge 1 ]] || fail "no Mach-O in bundle"
 
 [[ -d "$APP/Contents/Frameworks/Sparkle.framework" ]] || fail "Sparkle.framework not embedded"
-otool -l "$APP/Contents/MacOS/Skitcho" | grep -q '@executable_path/../Frameworks' ||
+# Captured first: grep -q on a pipe could SIGPIPE otool and fail the pipeline under pipefail.
+load_cmds="$(otool -l "$APP/Contents/MacOS/Skitcho")"
+rpath_list="$(awk '/cmd LC_RPATH/{r=1} r && $1=="path"{print $2; r=0}' <<<"$load_cmds")"
+grep -qxF '@executable_path/../Frameworks' <<<"$rpath_list" ||
   fail "missing @executable_path/../Frameworks rpath"
-if otool -l "$APP/Contents/MacOS/Skitcho" | awk '/cmd LC_RPATH/{r=1} r && $1=="path"{print $2; r=0}' | grep -q '^/'; then
+if grep -q '^/' <<<"$rpath_list"; then
   fail "absolute rpath left in executable"
 fi
 xpc="$(find "$APP" -name XPCServices -print)"

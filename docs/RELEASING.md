@@ -85,7 +85,8 @@ the tagged commit, so it is only as trustworthy as that commit: the approver mus
 The workflows use the `macos-26` arm64 runner label. They select the highest release
 `Xcode_27*.app` (betas and release candidates are skipped) and stop with an explicit
 "expected Swift 6.4" or "expected an arm64 runner" error when the image does not match.
-Update the label in `ci.yml` and `release.yml` if GitHub uses a different one.
+Update the label, the Xcode selection and the Swift version check together in `ci.yml`, `release.yml`
+and the Swift job of `codeql.yml` if GitHub uses a different one.
 
 ## Releasing
 
@@ -104,9 +105,11 @@ Update the label in `ci.yml` and `release.yml` if GitHub uses a different one.
    `.github/workflows/release.yml` and `scripts/` in that commit are unchanged from `main`. Then approve.
 4. The workflow runs the tests, then `scripts/release.sh`:
    - Preflight, before anything is built or sent to Apple: the Sparkle key pair matches, the
-     signing identity and notarization values are set, and the published appcast is fetched
-     (only HTTP 200 or a first-release 404 are accepted; any other answer stops the release).
-     The build number and `X.Y.Z` must both be greater than every published item.
+     notarization values are set, `SIGN_IDENTITY` is a valid code signing identity in the keychain
+     search list (an expired certificate fails here), and the published appcast is fetched. HTTP 200
+     merges the feed; a 404 stops the release unless `FIRST_RELEASE=1` is set (see below); any other
+     answer stops it too. The build number and `X.Y.Z` must both be greater than every published item.
+     The notarization credentials themselves are only checked by `notarytool`, after the build.
    - Builds and signs the app inside-out with the hardened runtime and runs its `--self-test`.
    - Builds `Skitcho-X.Y.Z.dmg` (UDZO, volume `Skitcho`), signs the DMG, notarizes it
      (45 minute limit; the notary log is printed on failure), staples and validates the ticket
@@ -117,6 +120,20 @@ Update the label in `ci.yml` and `release.yml` if GitHub uses a different one.
    `https://github.com/oleggohman/skitcho/releases/latest/download/appcast.xml`.
 
 Releases run one at a time (a `concurrency` group), and the job times out after 90 minutes.
+
+### The first release
+
+GitHub answers 404 for `releases/latest/download/appcast.xml` both when no release exists and when the
+latest release has no `appcast.xml` asset (a manual release, a deleted asset). Treating the second case as
+"no feed" would drop every older item and skip the version guards, so `scripts/release.sh` only accepts a
+404 with an explicit `FIRST_RELEASE=1`, and refuses `FIRST_RELEASE=1` when a feed is published. Set it
+only for the very first release (and never in the workflow):
+
+```bash
+FIRST_RELEASE=1 scripts/release.sh 0.1.0
+```
+
+If a later release fails with "returned 404", restore `appcast.xml` on the latest release instead.
 
 ## Verifying a release
 
@@ -137,5 +154,7 @@ Then launch an older build and use Skitcho, Check for Updates to confirm the upd
 
 `scripts/test-bundle.sh --release-dry-run` exercises `scripts/release.sh --dry-run` with a throwaway
 key, a fixture appcast instead of the published feed, ad-hoc signing and no notarization. It checks
-that the preflight rejects a bad key pair or stale versions, mounts the DMG read-only and asserts its
-contents, and verifies the appcast signature. It never touches your Keychain and CI runs it on every push.
+that the preflight rejects a bad key pair, stale versions, a misused `FIRST_RELEASE` and a CI release
+from a non-tag ref, mounts the DMG read-only and asserts its contents, and verifies the appcast signature.
+It never touches your Keychain. CI runs it on every push and pull request; the tag check applies only to
+real releases, so the dry-run passes on branches.
