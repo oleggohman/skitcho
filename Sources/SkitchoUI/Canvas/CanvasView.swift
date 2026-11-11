@@ -61,6 +61,9 @@ public final class CanvasView: NSView {
     for tool in ShapeToolController.supportedTools {
       register(ShapeToolController(editor: editor, tool: tool, zoom: { box.value }), for: tool)
     }
+    for tool in FreehandToolController.supportedTools {
+      register(FreehandToolController(editor: editor, tool: tool, zoom: { box.value }), for: tool)
+    }
     updateFrameSize()
     observeEditor()
   }

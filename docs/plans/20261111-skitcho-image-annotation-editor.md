@@ -399,9 +399,9 @@
 - Create: `Sources/SkitchoUI/Canvas/FreehandToolController.swift`
 - Create: `Tests/SkitchoUITests/FreehandToolTests.swift`
 
-- [ ] live low-pass preview; on mouse-up fit segments and add the element (highlighter flag/style)
-- [ ] write tests: a point stream produces one freehand element with ≥1 segment, the highlighter default color is yellow, a single point is a no-op
-- [ ] run tests. Must pass before task 18.
+- [x] live low-pass preview; on mouse-up fit segments and add the element (highlighter flag/style)
+- [x] write tests: a point stream produces one freehand element with ≥1 segment, the highlighter default color is yellow, a single point is a no-op
+- [x] run tests. Must pass before task 18.
 
 ### Task 18: Selection handles and direct manipulation
 

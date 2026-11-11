@@ -4,7 +4,7 @@ import Testing
 
 @testable import SkitchoUI
 
-@Suite struct ThemeTests {
+@MainActor @Suite struct ThemeTests {
   private func rgb(_ color: NSColor, appearance: NSAppearance.Name) -> [Double] {
     var out: [Double] = []
     NSAppearance(named: appearance)!.performAsCurrentDrawingAppearance {
