@@ -122,9 +122,10 @@ public enum DocumentRenderer {
     case .text(let content):
       TextRenderer.draw(content, style: style, rotation: element.rotation, in: context)
 
-    case .stamp:
-      // Stamps are drawn by their own renderer (a later task).
-      break
+    case .stamp(let stamp, let center, let tailAngle, _):
+      StampRenderer.draw(
+        stamp, center: center, tailAngle: tailAngle, style: style, rotation: element.rotation,
+        pivot: element.baseBounds.center, in: context, scale: scale, shadows: shadows)
     }
   }
 
@@ -143,7 +144,7 @@ public enum DocumentRenderer {
   }
 
   /// A soft shadow falling slightly down and to the right on screen.
-  private static func applyShadow(in context: CGContext, scale: Double, enabled: Bool) {
+  static func applyShadow(in context: CGContext, scale: Double, enabled: Bool) {
     guard enabled else { return }
     let shadowColor = CGColor(gray: 0, alpha: 0.3)
     // The shadow offset is expressed in device space (y-up), so "down" is negative.

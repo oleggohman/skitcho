@@ -305,9 +305,9 @@
 - Modify: `Sources/SkitchoCore/Render/DocumentRenderer.swift`
 - Create: `Tests/SkitchoCoreTests/RendererStampTests.swift`
 
-- [ ] badge circle plus drawn glyph paths (✓ ✗ ? ! ★), optional tail triangle at `tailAngle`, size from `strokeWidth`
-- [ ] write tests: badge center pixel is glyph or fill color as expected per kind, the tail adds ink in the tail direction only, every kind renders without throwing
-- [ ] run tests. Must pass before task 10.
+- [x] badge circle plus drawn glyph paths (✓ ✗ ? ! ★), optional tail triangle at `tailAngle`, size from `strokeWidth`
+- [x] write tests: badge center pixel is glyph or fill color as expected per kind, the tail adds ink in the tail direction only, every kind renders without throwing
+- [x] run tests. Must pass before task 10.
 
 ### Task 10: Raster image operations
 
