@@ -584,6 +584,67 @@ import struct SkitchoCore.Document
     #expect(f.editor.document == f.document.initial)
   }
 
+  /// Typing goes on between the save and its scheduled checkpoint: the saved state is still put on the undo
+  /// stack, so after the commit undo goes C, B, A and redo goes back A, B, C.
+  @Test func typingBeforeTheScheduledCheckpointKeepsTheSavedStep() async throws {
+    for isNew in [false, true] {
+      let element = textElement("A")
+      let f = try makeSaveFixture(isNew ? [] : [element])
+      if isNew {
+        #expect(f.controller.beginCreating(at: CGPoint(x: 100, y: 100)))
+      } else {
+        #expect(f.controller.beginEditing(element.id))
+      }
+      let start = f.document.initial
+      f.controller.update(text: "B")
+      f.manager.beginUndoGrouping()
+      let saved = try f.save()
+      f.controller.update(text: "C")
+      for _ in 0..<3 { await Task.yield() }
+      f.manager.endUndoGrouping()
+      #expect(f.manager.undoActionName == (isNew ? "Add Text" : "Edit Text"))
+      #expect(f.controller.session?.string == "C")
+      grouped(f.manager) { f.controller.commit() }
+      let committed = f.editor.document
+      #expect(string(of: committed.elements[0]) == "C")
+
+      f.manager.undo()
+      #expect(f.editor.document == saved, "isNew \(isNew): undo returns to the saved state")
+      f.manager.undo()
+      #expect(f.editor.document == start)
+      #expect(!f.manager.canUndo)
+      f.manager.redo()
+      #expect(f.editor.document == saved)
+      f.manager.redo()
+      #expect(f.editor.document == committed)
+      #expect(!f.manager.canRedo)
+    }
+  }
+
+  /// A checkpoint that runs after its edit ended and another began does not touch the new edit: the saved
+  /// state is not this edit's, so the new gesture keeps its start.
+  @Test func scheduledCheckpointIgnoresALaterEdit() async throws {
+    let first = textElement("A")
+    let second = textElement("X", at: CGPoint(x: 300, y: 300))
+    let f = try makeSaveFixture([first, second])
+    #expect(f.controller.beginEditing(first.id))
+    f.controller.update(text: "B")
+    _ = try f.save()
+    f.controller.update(text: "B2")
+    grouped(f.manager) { f.controller.commit() }
+    let committed = f.editor.document
+    #expect(f.controller.beginEditing(second.id))
+    f.controller.update(text: "Y")
+    // No group is open: a registration would raise.
+    for _ in 0..<3 { await Task.yield() }
+    #expect(f.editor.isInteracting)
+    f.controller.cancel()
+    #expect(f.editor.document == committed)
+    f.manager.undo()
+    #expect(!f.manager.canUndo)
+    #expect(f.editor.document == f.document.initial)
+  }
+
   /// An empty new stamp label is not saved, and neither is its link.
   @Test func snapshotDuringEmptyNewLabelDropsTheLink() throws {
     let (editor, _) = makeEditor()

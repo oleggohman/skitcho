@@ -153,12 +153,25 @@ public final class TextToolController: ToolController {
   /// text, equals the start and registers nothing.
   ///
   /// `SkitchoDocument.snapshot` runs off the main actor and cannot register this itself, so it schedules this
-  /// call on the main actor afterwards. It does nothing when the edit ended meanwhile or the document moved
-  /// on (the next save serves the newer state). SwiftUI owns the change count, so the document may stay
-  /// edited after the save; the next save or autosave, with no new step, then marks it clean.
+  /// call on the main actor afterwards. The user may have typed on before it runs: `saved` is still
+  /// checkpointed exactly (the live document stays as typed, so a later commit registers live -> saved and
+  /// undo passes through the saved state). It does nothing when the edit ended meanwhile, or when `saved`
+  /// differs from the live state by more than this edit's string (it does not belong to this edit).
+  /// SwiftUI owns the change count, so the document may stay edited after the save; the next save or
+  /// autosave, with no new step, then marks it clean.
   public func checkpointSavedEdit(_ saved: Document) {
-    guard let session, editor.isInteracting, documentCommittingEdit == saved else { return }
+    guard var session, editor.isInteracting else { return }
+    session.content.string = Self.string(of: session.id, in: saved)
+    guard document(committing: session) == saved else { return }
     editor.checkpointInteractive(saved, name: Self.stepName(for: session))
+  }
+
+  /// The string of text element `id` in `document`, empty when it is absent (a blank edit removes it).
+  private static func string(of id: UUID, in document: Document) -> String {
+    guard let element = document.elements.first(where: { $0.id == id }),
+      case .text(let content) = element.kind
+    else { return "" }
+    return content.string
   }
 
   /// The undo name of the step that ending `session` now would register.
@@ -175,8 +188,14 @@ public final class TextToolController: ToolController {
   /// or without the element when the live text is empty. Saving uses this, so a save during an edit writes
   /// what the user sees and the edit stays open. Equals `editor.document` when idle.
   public var documentCommittingEdit: Document {
+    guard let session else { return editor.document }
+    return document(committing: session)
+  }
+
+  /// The document as ending the edit with `session`'s string would leave it.
+  private func document(committing session: TextEditSession) -> Document {
     var document = editor.document
-    guard let session, editor.isInteracting,
+    guard editor.isInteracting,
       let index = document.elements.firstIndex(where: { $0.id == session.id }),
       case .text(var content) = document.elements[index].kind
     else { return document }
