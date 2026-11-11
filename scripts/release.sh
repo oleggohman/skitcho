@@ -1,0 +1,208 @@
+#!/usr/bin/env bash
+# Build, sign, (notarize) and package a release: dist/Skitcho-VERSION.dmg + dist/appcast.xml.
+# Usage: scripts/release.sh VERSION [--dry-run]
+# Env: SIGN_IDENTITY, SPARKLE_PUBLIC_ED_KEY (read by bundle.sh), SPARKLE_ED_PRIVATE_KEY (appcast signing),
+#      ASC_KEY_PATH, AppleStoreAPIKey, AppleIssuerID (notarization, skipped with --dry-run),
+#      APPCAST_URL (published feed used for merging and the version guards; tests point it at a file:// fixture),
+#      FIRST_RELEASE=1 (required when no feed is published yet: only then is a 404 for the feed accepted).
+# --dry-run signs ad-hoc and skips notarization. Requires openssl@3 (ed25519) to check the Sparkle key pair.
+# Secrets are only read from the environment and never printed. Do not add xtrace.
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$ROOT"
+
+fail() {
+  echo "error: $*" >&2
+  exit 1
+}
+
+[[ $# -ge 1 && $# -le 2 ]] || fail "usage: release.sh VERSION [--dry-run]"
+VERSION="$1"
+DRY_RUN=0
+if [[ $# -eq 2 ]]; then
+  [[ "$2" == "--dry-run" ]] || fail "unknown option '$2'"
+  DRY_RUN=1
+fi
+[[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || fail "VERSION must match X.Y.Z (got '$VERSION')"
+# A real release in CI must come from its own tag; a dry-run (CI on branches and PRs) builds any version.
+if [[ "$DRY_RUN" == 0 && "${GITHUB_ACTIONS:-}" == "true" && "${GITHUB_REF_NAME:-}" != "v$VERSION" ]]; then
+  fail "GITHUB_REF_NAME '${GITHUB_REF_NAME:-}' does not match v$VERSION"
+fi
+FIRST_RELEASE="${FIRST_RELEASE:-}"
+[[ -z "$FIRST_RELEASE" || "$FIRST_RELEASE" == 1 ]] || fail "FIRST_RELEASE must be unset or 1 (got '$FIRST_RELEASE')"
+
+APP="$ROOT/build/Skitcho.app"
+DIST="$ROOT/dist"
+DMG="$DIST/Skitcho-$VERSION.dmg"
+GA="$ROOT/.build/artifacts/sparkle/Sparkle/bin/generate_appcast"
+PREFIX="https://github.com/oleggohman/skitcho/releases/download/v$VERSION/"
+APPCAST_URL="${APPCAST_URL:-https://github.com/oleggohman/skitcho/releases/latest/download/appcast.xml}"
+
+# Keep secrets out of the environment of every child process (swift build, codesign, notarytool, ...).
+# They are passed explicitly: the Sparkle key on stdin, the notarization values as arguments.
+export -n SPARKLE_ED_PRIVATE_KEY AppleStoreAPIKey AppleIssuerID ASC_KEY_PATH 2>/dev/null || true
+
+WORK="$(mktemp -d)"
+trap 'rm -rf "$WORK"' EXIT
+
+# ---------------------------------------------------------------------------------------------------
+# Preflight: the inputs, the signing identity and the published feed are checked before building or
+# contacting Apple. The notarization credentials themselves can only be checked by notarytool, after the build.
+# ---------------------------------------------------------------------------------------------------
+[[ -n "${SPARKLE_ED_PRIVATE_KEY:-}" ]] || fail "SPARKLE_ED_PRIVATE_KEY is not set"
+PUBLIC_KEY="${SPARKLE_PUBLIC_ED_KEY:-}"
+[[ "$PUBLIC_KEY" =~ ^[A-Za-z0-9+/]{43}=$ ]] ||
+  fail "SPARKLE_PUBLIC_ED_KEY must be a 44-character base64 ed25519 public key"
+
+OPENSSL="$(brew --prefix openssl@3 2>/dev/null || true)/bin/openssl"
+[[ -x "$OPENSSL" ]] || OPENSSL=openssl # /usr/bin/openssl is LibreSSL and lacks ed25519
+# Prints the public key of a Sparkle private key (base64: a 32-byte seed, or the legacy 96-byte form whose
+# last 32 bytes are the public key). The key only travels through builtins and pipes, never argv or disk.
+derive_public_key() {
+  local len
+  len="$(printf '%s' "$1" | base64 --decode | wc -c | tr -d ' ')"
+  case "$len" in
+    32)
+      # PKCS#8 DER prefix for a raw ed25519 seed.
+      { printf '\x30\x2e\x02\x01\x00\x30\x05\x06\x03\x2b\x65\x70\x04\x22\x04\x20' &&
+        printf '%s' "$1" | base64 --decode; } |
+        "$OPENSSL" pkey -inform DER -pubout -outform DER 2>/dev/null | tail -c 32 | base64
+      ;;
+    96) printf '%s' "$1" | base64 --decode | tail -c 32 | base64 ;;
+    *) return 1 ;;
+  esac
+}
+derived="$(derive_public_key "$SPARKLE_ED_PRIVATE_KEY")" || derived=""
+[[ -n "$derived" ]] || fail "cannot derive the public key from SPARKLE_ED_PRIVATE_KEY (install openssl@3?)"
+[[ "$derived" == "$PUBLIC_KEY" ]] || fail "SPARKLE_PUBLIC_ED_KEY does not match SPARKLE_ED_PRIVATE_KEY"
+
+if [[ "$DRY_RUN" == 0 ]]; then
+  [[ -n "${SIGN_IDENTITY:-}" ]] || fail "SIGN_IDENTITY is not set (a release must be Developer ID signed)"
+  : "${ASC_KEY_PATH:?ASC_KEY_PATH is not set}" "${AppleStoreAPIKey:?AppleStoreAPIKey is not set}" \
+    "${AppleIssuerID:?AppleIssuerID is not set}"
+  [[ -f "$ASC_KEY_PATH" ]] || fail "ASC_KEY_PATH does not point to a file"
+  # -v lists only valid identities (an expired or revoked certificate is missing). Output captured first:
+  # grep -q on a pipe could SIGPIPE the producer under pipefail.
+  identities="$(security find-identity -v -p codesigning 2>/dev/null || true)"
+  grep -qF -- "$SIGN_IDENTITY" <<<"$identities" ||
+    fail "SIGN_IDENTITY is not a valid code signing identity in the keychain search list"
+else
+  SIGN_IDENTITY="" # dry-run is always ad-hoc signed
+fi
+
+if [[ ! -x "$GA" ]]; then
+  swift package resolve >/dev/null
+fi
+[[ -x "$GA" ]] || fail "generate_appcast not found at $GA"
+
+# bundle.sh derives CFBundleVersion the same way.
+if git rev-parse HEAD >/dev/null 2>&1; then
+  BUILD_NUMBER="$(git rev-list --count HEAD)"
+else
+  BUILD_NUMBER="0"
+fi
+
+# The published appcast keeps older versions in the feed. 200 merges it. 404 is accepted only with
+# FIRST_RELEASE=1: GitHub also answers 404 when the latest release lacks appcast.xml, and dropping the feed
+# would lose the update history and skip the version guards. Anything else aborts; the feed is never reset.
+rm -rf "$DIST"
+mkdir -p "$DIST"
+if [[ "$APPCAST_URL" == file://* ]]; then
+  curl -fsS "$APPCAST_URL" -o "$DIST/appcast.xml" || fail "cannot read $APPCAST_URL"
+else
+  code="$(curl -sSL --retry 3 --connect-timeout 15 --max-time 120 -w '%{http_code}' \
+    -o "$DIST/appcast.xml" "$APPCAST_URL")" || fail "fetching $APPCAST_URL failed (curl exit $?)"
+  case "$code" in
+    200) ;;
+    404)
+      rm -f "$DIST/appcast.xml"
+      [[ "$FIRST_RELEASE" == 1 ]] ||
+        fail "$APPCAST_URL returned 404; set FIRST_RELEASE=1 only if no release with an appcast exists yet"
+      echo "no published appcast (FIRST_RELEASE=1)"
+      ;;
+    *) fail "fetching $APPCAST_URL returned HTTP $code" ;;
+  esac
+fi
+if [[ -f "$DIST/appcast.xml" && "$FIRST_RELEASE" == 1 ]]; then
+  fail "FIRST_RELEASE=1 but a feed is published at $APPCAST_URL; unset it"
+fi
+if [[ -f "$DIST/appcast.xml" ]]; then
+  xmllint --noout "$DIST/appcast.xml" || fail "published appcast.xml does not parse"
+  max="$(grep -oE 'sparkle:version(>|=")[0-9]+' "$DIST/appcast.xml" | grep -oE '[0-9]+$' | sort -n | tail -1 || true)"
+  if [[ -n "$max" && "$BUILD_NUMBER" -le "$max" ]]; then
+    fail "build number $BUILD_NUMBER is not greater than published sparkle:version $max"
+  fi
+  max_short="$(grep -oE 'sparkle:shortVersionString(>|=")[0-9]+\.[0-9]+\.[0-9]+' "$DIST/appcast.xml" |
+    grep -oE '[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -1 || true)"
+  if [[ -n "$max_short" ]]; then
+    if [[ "$VERSION" == "$max_short" || "$(printf '%s\n' "$max_short" "$VERSION" | sort -V | tail -1)" != "$VERSION" ]]; then
+      fail "version $VERSION is not greater than published version $max_short"
+    fi
+  fi
+fi
+
+# ---------------------------------------------------------------------------------------------------
+# Build and sign the app (inside-out, hardened runtime with a Developer ID; ad-hoc in dry-run).
+# ---------------------------------------------------------------------------------------------------
+VERSION="$VERSION" SIGN_IDENTITY="$SIGN_IDENTITY" SPARKLE_PUBLIC_ED_KEY="$PUBLIC_KEY" "$ROOT/scripts/bundle.sh"
+
+plist_build="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$APP/Contents/Info.plist")"
+[[ "$plist_build" == "$BUILD_NUMBER" ]] || fail "CFBundleVersion $plist_build, expected $BUILD_NUMBER"
+plist_key="$(/usr/libexec/PlistBuddy -c 'Print :SUPublicEDKey' "$APP/Contents/Info.plist")"
+[[ "$plist_key" == "$PUBLIC_KEY" ]] || fail "SUPublicEDKey in the built Info.plist does not match the signing key"
+
+# Loads Sparkle under the final signature (library validation applies with the hardened runtime).
+selftest="$("$APP/Contents/MacOS/Skitcho" --self-test)" || fail "--self-test of the signed app exited non-zero"
+[[ "$selftest" == "ok" ]] || fail "--self-test of the signed app printed '$selftest'"
+
+# ---------------------------------------------------------------------------------------------------
+# Disk image: Skitcho.app plus an Applications symlink for drag-to-install.
+# ---------------------------------------------------------------------------------------------------
+STAGE="$WORK/dmg"
+mkdir -p "$STAGE"
+ditto "$APP" "$STAGE/Skitcho.app"
+ln -s /Applications "$STAGE/Applications"
+hdiutil create -quiet -fs HFS+ -format UDZO -srcfolder "$STAGE" -volname Skitcho -ov "$DMG"
+rm -rf "$STAGE"
+
+if [[ "$DRY_RUN" == 0 ]]; then
+  codesign -f -s "$SIGN_IDENTITY" --timestamp "$DMG"
+  codesign --verify --strict "$DMG"
+
+  notary() {
+    xcrun notarytool "$@" --key "$ASC_KEY_PATH" --key-id "$AppleStoreAPIKey" --issuer "$AppleIssuerID"
+  }
+  print_log() {
+    local sub_id
+    sub_id="$(printf '%s' "$1" | plutil -extract id raw -o - - 2>/dev/null || true)"
+    if [[ -n "$sub_id" ]]; then
+      notary log "$sub_id" || true
+    fi
+  }
+  result="$(notary submit "$DMG" --wait --timeout 45m --output-format json)" || {
+    rc=$?
+    print_log "${result:-}"
+    fail "notarytool submit failed (exit $rc)"
+  }
+  status="$(printf '%s' "$result" | plutil -extract status raw -o - - 2>/dev/null || true)"
+  if [[ "$status" != "Accepted" ]]; then
+    print_log "$result"
+    fail "notarization status '$status'"
+  fi
+  xcrun stapler staple "$DMG"
+  xcrun stapler validate "$DMG"
+  spctl_out="$(spctl -a -t open --context context:primary-signature -vv "$DMG" 2>&1 || true)"
+  echo "$spctl_out"
+  grep -q 'Notarized Developer ID' <<<"$spctl_out" || fail "spctl does not report Notarized Developer ID"
+else
+  echo "dry-run: ad-hoc signed, skipping DMG signing and notarization"
+fi
+
+# ---------------------------------------------------------------------------------------------------
+# Appcast: dist/ holds only the final DMG and the fetched feed; the DMG is the Sparkle enclosure.
+# ---------------------------------------------------------------------------------------------------
+printf '%s' "$SPARKLE_ED_PRIVATE_KEY" | "$GA" --ed-key-file - --maximum-versions 0 \
+  --download-url-prefix "$PREFIX" "$DIST"
+
+echo "release ok: $DMG (version $VERSION build $BUILD_NUMBER, dry-run=$DRY_RUN)"

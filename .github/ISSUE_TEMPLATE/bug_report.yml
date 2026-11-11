@@ -1,0 +1,55 @@
+name: Bug report
+description: Something in Skitcho does not work as expected
+title: "[Bug]: "
+body:
+  - type: input
+    id: macos
+    attributes:
+      label: macOS version
+      placeholder: "e.g. macOS 15.4"
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Skitcho version
+      description: Shown in Skitcho > About Skitcho.
+      placeholder: "e.g. 1.0.0"
+    validations:
+      required: true
+  - type: input
+    id: mac-model
+    attributes:
+      label: Mac model (Apple silicon)
+      placeholder: "e.g. MacBook Air, M2"
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Open ...
+        2. Click ...
+        3. See ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+    validations:
+      required: true
+  - type: textarea
+    id: screenshots
+    attributes:
+      label: Screenshots
+      description: Optional. Drag images here. Do not include private or sensitive content.
+    validations:
+      required: false
