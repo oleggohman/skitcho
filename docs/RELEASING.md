@@ -131,22 +131,19 @@ latest release has no `appcast.xml` asset (a manual release, a deleted asset). T
 workflow never sets it, so a tag run cannot publish the first release. `v0.1.0` is built locally on the
 maintainer's Mac and published with `gh`:
 
-1. Merge the release to `main`, then create and push the tag (only admins may, see the tag ruleset):
+Build first and tag only after the build succeeded: the tag ruleset blocks moving or deleting a pushed
+`v*` tag, so a tag pushed before a failed build would strand the version.
+
+1. Merge the release to `main` and check out the commit to release, with a full clone (the build number
+   is the commit count, so it must be built from exactly the commit that gets tagged):
 
    ```bash
    git checkout main && git pull
-   git tag v0.1.0
-   git push origin v0.1.0
-   ```
-
-   The push starts the release workflow, which waits for approval of the `release` environment.
-   **Reject** that deployment: without a feed it would stop at the 404 anyway.
-2. Build from the tagged commit with a full clone (the build number is the commit count):
-
-   ```bash
-   git checkout --detach v0.1.0
+   git checkout --detach "$(git rev-parse main)"
    git status --porcelain   # must print nothing
    ```
+
+2. Build, sign and notarize locally (nothing is published yet).
 
    Set the same inputs the workflow gives `scripts/release.sh`, from your local `apple-signer`
    environment and the Sparkle key in your Keychain (step 1 of the setup):
@@ -166,21 +163,31 @@ maintainer's Mac and published with `gh`:
    FIRST_RELEASE=1 scripts/release.sh 0.1.0
    ```
 
-3. Publish the release with both assets, marked as latest:
+3. Only after step 2 succeeded, tag the same commit and push the tag (only admins may, see the tag
+   ruleset):
+
+   ```bash
+   git tag v0.1.0
+   git push origin v0.1.0
+   ```
+
+   The push starts the release workflow, which waits for approval of the `release` environment.
+   **Reject** that deployment: this release is published by hand in the next step.
+4. Publish the release with both assets, marked as latest:
 
    ```bash
    gh release create v0.1.0 dist/Skitcho-0.1.0.dmg dist/appcast.xml \
      --repo oleggohman/skitcho --verify-tag --latest --title "Skitcho 0.1.0" --generate-notes
    ```
 
-4. Check that the feed is published (expected output: `200`):
+5. Check that the feed is published (expected output: `200`):
 
    ```bash
    curl -sSL -o /dev/null -w '%{http_code}\n' \
      https://github.com/oleggohman/skitcho/releases/latest/download/appcast.xml
    ```
 
-5. Return to `main` (`git checkout main`) and unset the variables.
+6. Return to `main` (`git checkout main`) and unset the variables.
 
 Every later release uses the tag workflow (see [Releasing](#releasing)), which requires this feed to exist.
 Never set `FIRST_RELEASE` again. If a later release fails with "returned 404", restore `appcast.xml` on
