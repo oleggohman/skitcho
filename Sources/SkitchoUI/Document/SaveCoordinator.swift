@@ -181,7 +181,11 @@ public final class SaveCoordinator {
     }
     if retarget { jpegTarget = target }
     guard markSaved else { return }
-    if let date = try? target.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate {
+    // NSDocument compares this date with its own file, so it is updated only when that file was written. After a
+    // JPEG Save As the document keeps its original `fileURL` (a JPEG never becomes the document's saved type).
+    if let fileURL = nsDocument.fileURL, fileURL.standardizedFileURL == target.standardizedFileURL,
+      let date = try? target.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate
+    {
       nsDocument.fileModificationDate = date
     }
     nsDocument.updateChangeCount(.changeCleared)

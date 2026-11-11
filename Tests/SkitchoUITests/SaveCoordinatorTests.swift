@@ -228,6 +228,28 @@ private final class RecordingDocument: NSDocument {
     #expect(!nsDocument.isDocumentEdited)
   }
 
+  @Test func aJPEGSaveAsToAnotherFileLeavesTheDocumentModificationDate() throws {
+    let opened = try writeFile("a.jpg", blackJPEG())
+    let nsDocument = document(type: .jpeg, url: opened)
+    let original = Date(timeIntervalSince1970: 1_000_000)
+    nsDocument.fileModificationDate = original
+    let log = PanelLog()
+    let jpeg = directory.appendingPathComponent("b.jpg")
+    log.choice = SavePanelChoice(url: jpeg, format: .jpeg)
+    let coordinator = makeCoordinator(makeEditor(), nsDocument: nsDocument, log: log)
+
+    coordinator.saveAs()
+    #expect(isJPEG(try Data(contentsOf: jpeg)))
+    #expect(!nsDocument.isDocumentEdited)
+    #expect(nsDocument.fileModificationDate == original)
+
+    // ⌘S to the Save As target does not touch it either.
+    nsDocument.updateChangeCount(.changeDone)
+    coordinator.save()
+    #expect(!nsDocument.isDocumentEdited)
+    #expect(nsDocument.fileModificationDate == original)
+  }
+
   @Test func cancellingThePanelChangesNothing() {
     let nsDocument = document(type: .skitchoDocument, url: nil)
     let log = PanelLog()
