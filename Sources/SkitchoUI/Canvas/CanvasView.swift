@@ -495,7 +495,8 @@ public final class CanvasView: NSView {
   public var isEditingText: Bool { textController?.isEditing ?? false }
 
   /// The document to save: like `editor.document`, but with a running text edit's live string in place.
-  public var savableDocument: Document { textController?.documentCommittingEdit ?? editor.document }
+  /// The text controller remembers it, so ending the edit on a different document marks it edited.
+  public var savableDocument: Document { textController?.documentForSaving() ?? editor.document }
 
   /// Routes a key press: a tool shortcut switches the tool when `ToolShortcutRouter` allows it, otherwise the
   /// active controller gets the key (type-to-create, delete, arrows, Escape). Returns true when consumed.

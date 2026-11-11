@@ -42,6 +42,8 @@ public final class TextToolController: ToolController {
   /// Where type-to-create puts new text: the last pressed point, else the top-left area of the canvas.
   private var lastPoint: CGPoint?
   private var manipulating = false
+  /// The document last saved while the running edit was open (see `documentForSaving()`), nil when none was.
+  private var savedDuringEdit: Document?
 
   /// Called whenever `session` starts, changes or ends.
   public var editingDidChange: (() -> Void)?
@@ -73,6 +75,7 @@ public final class TextToolController: ToolController {
     editor.document.elements.append(element)
     var live = content
     live.string = seed
+    savedDuringEdit = nil
     session = TextEditSession(id: element.id, isNew: true, content: live, style: style, rotation: 0)
     editor.deselect()
     changed()
@@ -91,6 +94,7 @@ public final class TextToolController: ToolController {
     var hidden = content
     hidden.string = ""
     editor.document.elements[index].kind = .text(hidden)
+    savedDuringEdit = nil
     session = TextEditSession(
       id: id, isNew: false, content: content, style: element.style, rotation: element.rotation)
     editor.deselect()
@@ -113,18 +117,26 @@ public final class TextToolController: ToolController {
   /// Ends the edit with `text`. Empty (or whitespace-only) text removes the element: a new element leaves no
   /// undo entry, an existing one is deleted as one undo step. Otherwise exactly one undo step is registered
   /// ("Add Text" or "Edit Text"; none when an existing text is unchanged) and the element is selected.
+  /// If a save during the edit wrote a different document, a step back to it is registered instead of none,
+  /// so the document is marked edited.
   public func commit(text: String) {
     guard let current = session else { return }
     session = nil
     guard editor.isInteracting else {
       // The edit's gesture was ended elsewhere (an undo restored another state): the edit no longer applies.
+      savedDuringEdit = nil
       changed()
       return
     }
     let isEmpty = text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    let name = current.isNew ? "Add Text" : "Edit Text"
+    var registered = false
     if isEmpty {
       editor.cancelInteractive()
-      if !current.isNew { editor.remove(ids: [current.id], name: "Delete Text") }
+      if !current.isNew {
+        editor.remove(ids: [current.id], name: "Delete Text")
+        registered = true
+      }
     } else {
       if let index = editor.document.elements.firstIndex(where: { $0.id == current.id }),
         case .text(var content) = editor.document.elements[index].kind
@@ -132,18 +144,36 @@ public final class TextToolController: ToolController {
         content.string = text
         editor.document.elements[index].kind = .text(content)
       }
-      editor.commitInteractive(name: current.isNew ? "Add Text" : "Edit Text")
+      registered = editor.commitInteractive(name: name)
       editor.select(current.id)
     }
+    endSavedEdit(registered: registered, name: name)
     changed()
   }
 
-  /// Abandons the edit: new text disappears, existing text is restored. No undo entry.
+  /// Abandons the edit: new text disappears, existing text is restored. No undo entry, unless a save during
+  /// the edit wrote a different document (see `commit(text:)`).
   public func cancel() {
-    guard session != nil else { return }
+    guard let current = session else { return }
     session = nil
     editor.cancelInteractive()
+    endSavedEdit(registered: false, name: current.isNew ? "Add Text" : "Edit Text")
     changed()
+  }
+
+  /// The edit ended. When it was saved mid-edit and ended on another document without an undo step, the
+  /// change count would stay at the save while the file differs from the screen; one step marks it edited.
+  private func endSavedEdit(registered: Bool, name: String) {
+    defer { savedDuringEdit = nil }
+    guard !registered, let saved = savedDuringEdit else { return }
+    editor.registerStep(returningTo: saved, name: name)
+  }
+
+  /// `documentCommittingEdit`, remembered as the saved state of the running edit (see `commit(text:)`).
+  public func documentForSaving() -> Document {
+    let document = documentCommittingEdit
+    if isEditing, editor.isInteracting { savedDuringEdit = document }
+    return document
   }
 
   /// The document as committing the running edit would leave it: the live string in place of the hidden one,

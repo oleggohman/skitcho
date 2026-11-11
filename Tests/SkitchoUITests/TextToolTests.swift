@@ -374,11 +374,61 @@ import struct SkitchoCore.Document
 
     // Emptied text would be deleted by the commit, so it is not saved either.
     controller.update(text: "  ")
-    #expect(try document.snapshot(contentType: .skitchoDocument).elements.isEmpty)
+    let savedEmpty = try document.snapshot(contentType: .skitchoDocument)
+    #expect(savedEmpty.elements.isEmpty)
+    // Retyping the start text: the edit itself changes nothing, but the file lacks the element, so the
+    // commit still registers a step (marking the document edited) whose undo returns to the saved state.
     controller.update(text: "Hello")
-    controller.commit()
-    #expect(!manager.canUndo)
+    grouped(manager) { controller.commit() }
+    #expect(manager.canUndo)
+    #expect(string(of: document.editor.document.elements[0]) == "Hello")
     #expect(try document.snapshot(contentType: .skitchoDocument) == document.editor.document)
+    manager.undo()
+    #expect(document.editor.document == savedEmpty)
+  }
+
+  /// Saved mid-edit as "Hello world", then edited back to the start text: the file differs from the screen,
+  /// so ending the edit (commit or cancel) marks the document edited; without a save it stays clean.
+  @Test func endingAnEditThatWasSavedDifferentMarksTheDocumentEdited() throws {
+    for ending in ["commit", "cancel", "unsaved"] {
+      let element = textElement("Hello")
+      var initial = Document.blank(size: CGSize(width: 800, height: 600))
+      initial.elements = [element]
+      let document = SkitchoDocument(initial: initial)
+      let manager = UndoManager()
+      manager.groupsByEvent = false
+      document.editor.undoManager = manager
+      document.editor.currentTool = .text
+      let canvas = CanvasView(editor: document.editor)
+      document.canvasHandle.attach(canvas)
+      let controller = try #require(canvas.activeController as? TextToolController)
+
+      #expect(controller.beginEditing(element.id))
+      controller.update(text: "Hello world")
+      if ending != "unsaved" {
+        let saved = try document.snapshot(contentType: .skitchoDocument)
+        #expect(string(of: saved.elements[0]) == "Hello world")
+      }
+      controller.update(text: "Hello")
+      if ending == "unsaved" {
+        // No group is open: a registration here would raise, and an empty group would count as a step.
+        controller.commit()
+        #expect(string(of: document.editor.document.elements[0]) == "Hello")
+        #expect(!manager.canUndo, "an unchanged, unsaved edit registers nothing")
+        continue
+      }
+      grouped(manager) {
+        if ending == "cancel" { controller.cancel() } else { controller.commit() }
+      }
+      #expect(string(of: document.editor.document.elements[0]) == "Hello")
+      #expect(manager.canUndo, "\(ending): the document must be marked edited")
+      manager.undo()
+      #expect(string(of: document.editor.document.elements[0]) == "Hello world")
+      // The next edit starts without a remembered save: unchanged, it registers nothing.
+      #expect(controller.beginEditing(element.id))
+      controller.commit()
+      #expect(!manager.canUndo)
+    }
   }
 
   /// An empty new stamp label is not saved, and neither is its link.
@@ -393,7 +443,11 @@ import struct SkitchoCore.Document
     #expect(canvas.isEditingText)
     let saved = canvas.savableDocument
     #expect(saved.elements.count == 1)
-    if case .stamp(_, _, _, let label) = saved.elements[0].kind { #expect(label == nil) }
+    guard case .stamp(_, _, _, let label) = saved.elements.first?.kind else {
+      Issue.record("expected the stamp to be saved")
+      return
+    }
+    #expect(label == nil)
   }
 
   /// Undo is unavailable while the overlay (the first responder during an edit) is up.

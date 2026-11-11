@@ -67,11 +67,22 @@ public final class EditorModel {
   }
 
   /// Ends the gesture and registers exactly one undo step (nothing when the document did not change).
-  public func commitInteractive(name: String) {
-    guard let start = interactiveStart else { return }
+  /// Returns true when a step was registered.
+  @discardableResult
+  public func commitInteractive(name: String) -> Bool {
+    guard let start = interactiveStart else { return false }
     interactiveStart = nil
-    guard document != start else { return }
+    guard document != start else { return false }
     registerUndo(restoring: start, name: name)
+    return true
+  }
+
+  /// Registers an undo step back to `snapshot` when the document differs from it. A save during a gesture
+  /// writes a state the undo stack never held; this marks the document edited when the gesture then ends
+  /// elsewhere without a step of its own, and undoing it returns to what was saved.
+  public func registerStep(returningTo snapshot: Document, name: String) {
+    guard document != snapshot else { return }
+    registerUndo(restoring: snapshot, name: name)
   }
 
   /// Ends the gesture and reverts to the snapshot without registering anything.
