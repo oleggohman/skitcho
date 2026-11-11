@@ -567,21 +567,21 @@
 - Create: `scripts/release.sh`
 - Modify: `scripts/test-bundle.sh`
 
-- [ ] `release.sh VERSION [--dry-run]`:
+- [x] `release.sh VERSION [--dry-run]`:
   - `set -euo pipefail` with **no `set -x`**
   - assert `VERSION` matches `^[0-9]+\.[0-9]+\.[0-9]+$`, and (in CI) that `GITHUB_REF_NAME` = `vVERSION`
   - `VERSION=… SIGN_IDENTITY=… scripts/bundle.sh`
   - zip with `ditto -c -k --sequesterRsrc --keepParent build/Skitcho.app dist/Skitcho-VERSION.zip`
-- [ ] notarization (skipped in dry-run):
+- [x] notarization (skipped in dry-run):
   - `xcrun notarytool submit dist/Skitcho-VERSION.zip --key "$ASC_KEY_PATH" --key-id "$AppleStoreAPIKey" --issuer "$AppleIssuerID" --wait --output-format json`
   - parse with `plutil`/python: if `status` ≠ `Accepted`, run `notarytool log <id>` and exit 1
   - `xcrun stapler staple` + `stapler validate`, then re-zip, then `spctl -a -t exec -vv build/Skitcho.app` shows "Notarized Developer ID"
-- [ ] appcast:
+- [x] appcast:
   - `curl -fsSL https://github.com/oleggohman/skitcho/releases/latest/download/appcast.xml -o dist/appcast.xml || rm -f dist/appcast.xml` (a 404 on the first release is fine)
   - if the file exists, assert the new `CFBundleVersion` > the max `sparkle:version` in it
   - `dist/` holds only the new zip plus that appcast
   - `GA=.build/artifacts/sparkle/Sparkle/bin/generate_appcast` (assert it exists), then `printf '%s' "$SPARKLE_ED_PRIVATE_KEY" | "$GA" --ed-key-file - --maximum-versions 0 --download-url-prefix "https://github.com/oleggohman/skitcho/releases/download/vVERSION/" dist/`
-- [ ] dry-run test (`test-bundle.sh --release-dry-run`) with a key that is **never touched by the Keychain or `generate_keys`**:
+- [x] dry-run test (`test-bundle.sh --release-dry-run`) with a key that is **never touched by the Keychain or `generate_keys`**:
   - `OPENSSL=$(brew --prefix openssl@3 2>/dev/null)/bin/openssl` if it exists, else `openssl`; assert `genpkey -algorithm ed25519` succeeds first (`/usr/bin/openssl` is LibreSSL)
   - generate the key in `$TMPDIR`; seed = `pkey -outform DER | tail -c 32 | base64` → `$TMPDIR/seed` and `SPARKLE_ED_PRIVATE_KEY`
   - public key = `pkey -pubout -outform DER | tail -c 32 | base64`, used **only** as `SPARKLE_PUBLIC_ED_KEY` for the dry-run bundle
@@ -590,7 +590,7 @@
   - extract that `sparkle:edSignature` as `$SIG`, then assert `sign_update --verify --ed-key-file "$TMPDIR/seed" dist/Skitcho-VERSION.zip "$SIG"` exits 0 (`sign_update` verifies with the private key file; it has no public-key option)
   - delete the temp key files
 - [x] confirm Sparkle accepts the raw 32-byte seed format (verified by plan reviewer with Sparkle 2.10.1: `sign_update --ed-key-file <seed>` signs and `--verify` exits 0)
-- [ ] run tests + dry-run. Must pass before task 31.
+- [x] run tests + dry-run. Must pass before task 31.
 
 ### Task 31: Release workflow and maintainer docs
 

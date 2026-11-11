@@ -10,6 +10,62 @@ fail() {
   exit 1
 }
 
+if [[ "${1:-}" == "--release-dry-run" ]]; then
+  # Throwaway ed25519 key that never touches the Keychain or Sparkle's generate_keys.
+  WORK="$(mktemp -d)"
+  trap 'rm -rf "$WORK"' EXIT
+  OPENSSL="$(brew --prefix openssl@3 2>/dev/null || true)/bin/openssl"
+  [[ -x "$OPENSSL" ]] || OPENSSL=openssl # /usr/bin/openssl is LibreSSL and may lack ed25519
+  "$OPENSSL" genpkey -algorithm ed25519 -out "$WORK/key.pem" 2>/dev/null ||
+    fail "$OPENSSL cannot generate ed25519 keys (install openssl@3: brew install openssl@3)"
+  "$OPENSSL" pkey -in "$WORK/key.pem" -outform DER | tail -c 32 | base64 >"$WORK/seed"
+  PUB="$("$OPENSSL" pkey -in "$WORK/key.pem" -pubout -outform DER | tail -c 32 | base64)"
+
+  DRY_VERSION="9.9.9"
+  rm -rf "$ROOT/dist"
+  SPARKLE_ED_PRIVATE_KEY="$(cat "$WORK/seed")" SPARKLE_PUBLIC_ED_KEY="$PUB" SIGN_IDENTITY="" \
+    "$ROOT/scripts/release.sh" "$DRY_VERSION" --dry-run || fail "release.sh --dry-run failed"
+
+  ZIP="$ROOT/dist/Skitcho-$DRY_VERSION.zip"
+  APPCAST="$ROOT/dist/appcast.xml"
+  [[ -f "$ZIP" ]] || fail "missing $ZIP"
+  [[ -f "$APPCAST" ]] || fail "missing appcast.xml"
+
+  # The zip holds an arm64-only app.
+  UNZIP="$WORK/unzip"
+  mkdir -p "$UNZIP"
+  ditto -x -k "$ZIP" "$UNZIP"
+  zmacho=0
+  while IFS= read -r -d '' f; do
+    if file -b "$f" | grep -q 'Mach-O'; then
+      [[ "$(lipo -archs "$f")" == "arm64" ]] || fail "zip: $f is not thin arm64"
+      zmacho=$((zmacho + 1))
+    fi
+  done < <(find "$UNZIP/Skitcho.app" -type f -print0)
+  [[ "$zmacho" -ge 1 ]] || fail "zip: no Mach-O found"
+  codesign --verify --deep --strict "$UNZIP/Skitcho.app" || fail "zip: codesign verification failed"
+  zpub="$(/usr/libexec/PlistBuddy -c 'Print :SUPublicEDKey' "$UNZIP/Skitcho.app/Contents/Info.plist")"
+  [[ "$zpub" == "$PUB" ]] || fail "zip: SUPublicEDKey does not match the dry-run key"
+
+  # appcast.xml parses, carries an edSignature and the right enclosure URL.
+  xmllint --noout "$APPCAST" || fail "appcast.xml does not parse"
+  want_url="https://github.com/oleggohman/skitcho/releases/download/v$DRY_VERSION/Skitcho-$DRY_VERSION.zip"
+  got_url="$(xmllint --xpath 'string(//*[local-name()="enclosure"]/@url)' "$APPCAST")"
+  [[ "$got_url" == "$want_url" ]] || fail "enclosure url '$got_url', expected '$want_url'"
+  SIG="$(xmllint --xpath 'string(//*[local-name()="enclosure"]/@*[local-name()="edSignature"])' "$APPCAST")"
+  [[ -n "$SIG" ]] || fail "appcast.xml has no sparkle:edSignature"
+
+  # sign_update verifies with the private key file (it has no public-key option).
+  SU="$ROOT/.build/artifacts/sparkle/Sparkle/bin/sign_update"
+  [[ -x "$SU" ]] || fail "sign_update not found at $SU"
+  "$SU" --verify --ed-key-file "$WORK/seed" "$ZIP" "$SIG" || fail "sign_update --verify rejected the appcast signature"
+
+  rm -f "$WORK/key.pem" "$WORK/seed"
+  rm -rf "$ROOT/dist"
+  echo "release dry-run ok (arm64-only zip, appcast url + edSignature verified)"
+  exit 0
+fi
+
 "$ROOT/scripts/bundle.sh"
 
 APP="$ROOT/build/Skitcho.app"
