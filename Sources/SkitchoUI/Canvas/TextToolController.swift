@@ -199,8 +199,8 @@ public final class TextToolController: ToolController {
       beginEditing(hit.id)
       return
     }
-    // Selection rule: a press on the selection's handle or element manipulates it; so does a press on text.
-    if hitText || manipulator.pressesSelection(at: point) {
+    // Selection rule: a press on a handle of the selection manipulates it; so does a press on text.
+    if hitText || manipulator.pressesHandle(at: point) {
       manipulating = true
       manipulator.mouseDown(at: point, modifiers: modifiers)
       return

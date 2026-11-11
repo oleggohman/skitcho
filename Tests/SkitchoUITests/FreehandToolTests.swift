@@ -44,7 +44,8 @@ import struct SkitchoCore.Document
     }
     #expect(segments.count >= 1)
     #expect(!highlighter)
-    #expect(editor.selection == [editor.document.elements[0].id])
+    // Strokes are not auto-selected (handles would catch the next stroke).
+    #expect(editor.selection.isEmpty)
     #expect(editor.document.elements[0].style == editor.nextStyle(for: .marker))
     // The stroke ends where the pointer was released.
     #expect(segments.last?.p3 == wave.last)
@@ -111,6 +112,19 @@ import struct SkitchoCore.Document
     #expect(tool.keyDown(.escape, modifiers: []))
     #expect(editor.document.elements.isEmpty)
     #expect(!editor.isInteracting)
+  }
+
+  /// Handwriting: the next stroke may start on the previous one and must draw, never drag it.
+  @Test func strokeStartingOnPreviousStrokeDrawsANewOne() {
+    let (editor, manager) = makeEditor()
+    let tool = controller(editor, .marker)
+    stroke(tool, manager, points: wave)
+    let first = editor.document.elements[0]
+    // Starts exactly on the first stroke, then writes below it.
+    stroke(tool, manager, points: [wave[5]] + wave.map { CGPoint(x: $0.x + 2, y: $0.y + 30) })
+    #expect(editor.document.elements.count == 2)
+    #expect(editor.document.elements[0] == first)
+    #expect(manager.undoActionName == "Add Drawing")
   }
 
   @Test func canvasRegistersFreehandTools() {

@@ -8,8 +8,8 @@ import SkitchoCore
 /// The element is created on the first drag past the threshold and updated live in the document (inside an
 /// interactive gesture), so the canvas renders the preview with the normal renderer. Mouse-up commits one
 /// undo step and selects the new element; a drag that stays below the minimum size creates nothing.
-/// Selection rule: a press on a handle or an already selected element manipulates the selection (resize/rotate/move); anywhere else
-/// starts a new element, even on top of an unselected element.
+/// Selection rule: a press on a handle of the selection manipulates it (resize/rotate/endpoint); anywhere else,
+/// including the body of the selected or any other element, starts a new element. Moving is the V tool's job.
 @MainActor
 public final class ShapeToolController: ToolController {
   /// Drags shorter than this many view points count as a click.
@@ -22,7 +22,7 @@ public final class ShapeToolController: ToolController {
   private let editor: EditorModel
   private let tool: Tool
   private let zoom: () -> Double
-  /// Moves the selection when the press lands on a selected element.
+  /// Drives the selection's handles when the press lands on one.
   private let manipulator: SelectPanToolController
 
   private var origin: CGPoint?
@@ -100,7 +100,7 @@ public final class ShapeToolController: ToolController {
     origin = nil
     elementID = nil
     manipulating = false
-    if manipulator.pressesSelection(at: point) {
+    if manipulator.pressesHandle(at: point) {
       manipulating = true
       manipulator.mouseDown(at: point, modifiers: modifiers)
       return

@@ -47,11 +47,10 @@ public final class SelectPanToolController: ToolController {
     return HandleLayout.hit(element, at: point, zoom: zoom())
   }
 
-  /// True when a press at `point` manipulates the current selection: it lands on a handle of the single
-  /// selected element or on a selected element. Drawing tools use this for the selection rule.
-  func pressesSelection(at point: CGPoint) -> Bool {
+  /// True when a press at `point` lands on a handle of the single selected element. Drawing tools use this for
+  /// the selection rule: only handles manipulate the selection, a press on its body draws (V moves elements).
+  func pressesHandle(at point: CGPoint) -> Bool {
     handle(at: point) != nil
-      || editor.selectedElements.contains { $0.hitTest(point: point, tolerance: tolerance) }
   }
 
   public func mouseDown(at point: CGPoint, modifiers: ToolModifiers) {

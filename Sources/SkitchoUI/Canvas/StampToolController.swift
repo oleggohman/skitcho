@@ -9,7 +9,8 @@ import SkitchoCore
 ///
 /// "Attach Label" (`attachLabel(to:)`, or a double-click on a stamp without a label) creates a text element
 /// linked through the stamp's `labelID`, placed beside the badge, and opens the in-place text editor.
-/// Selection rule: a press on a handle or an already selected element manipulates the selection.
+/// Selection rule: a press on a handle of the selection manipulates it; anywhere else (also on the selected
+/// stamp's badge) places a new stamp. Moving is the V tool's job.
 @MainActor
 public final class StampToolController: ToolController {
   /// Drags shorter than this many view points count as a click (no tail).
@@ -106,7 +107,7 @@ public final class StampToolController: ToolController {
         return
       }
     }
-    if manipulator.pressesSelection(at: point) {
+    if manipulator.pressesHandle(at: point) {
       manipulating = true
       manipulator.mouseDown(at: point, modifiers: modifiers)
       return

@@ -7,9 +7,10 @@ import SkitchoCore
 ///
 /// While dragging, raw points go through a live low-pass filter and the element is updated inside an
 /// interactive gesture as a straight-segment polyline, so the canvas shows the preview with the normal
-/// renderer. Mouse-up fits cubic beziers to the filtered stream, commits one undo step and selects the new
-/// element. A click without movement creates nothing. Selection rule matches the shape tools: a press on a handle or an
-/// already selected element manipulates the selection, anywhere else starts a stroke.
+/// renderer. Mouse-up fits cubic beziers to the filtered stream and commits one undo step. A click without
+/// movement creates nothing. Strokes are not selected afterwards (and end any selection), so the next stroke can
+/// start on or next to the previous one, as in handwriting. Only a handle of a selection made with another tool
+/// manipulates it; anywhere else starts a stroke.
 @MainActor
 public final class FreehandToolController: ToolController {
   /// Drags shorter than this many view points count as a click.
@@ -59,7 +60,7 @@ public final class FreehandToolController: ToolController {
     points = []
     elementID = nil
     manipulating = false
-    if manipulator.pressesSelection(at: point) {
+    if manipulator.pressesHandle(at: point) {
       manipulating = true
       manipulator.mouseDown(at: point, modifiers: modifiers)
       return
@@ -110,7 +111,8 @@ public final class FreehandToolController: ToolController {
     } else {
       update(id, segments: segments)
       editor.commitInteractive(name: highlighter ? "Add Highlight" : "Add Drawing")
-      editor.select(id)
+      // No auto-select: the selection would put handles under the next stroke.
+      editor.deselect()
     }
     needsDisplay?()
   }

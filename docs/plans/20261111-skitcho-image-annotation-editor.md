@@ -145,7 +145,9 @@
 - Tools:
   - V select/pan; A arrow; T text; M marker; H highlighter; R rect; U rounded rect; O ellipse; L line; S stamp; P pixelate; C crop
   - Space-drag pans with any tool
-- **Selection rule**: with a drawing tool, mouse-down on the **handle or selected element** of the current selection manipulates it; anywhere else it draws a new element. With V, a click selects the top-most hit, a drag moves it, and a drag on empty space makes a marquee.
+- **Selection rule**: with a drawing tool, mouse-down on a **handle** of the current selection manipulates it (resize, rotate, endpoint); anywhere else, including the body of the selected element, it draws a new element. Moving is the V tool's job: with V, a click selects the top-most hit, a drag moves it, and a drag on empty space makes a marquee. The T tool also moves text when pressed on it (double-click edits).
+  - Freehand (marker/highlighter) strokes are not auto-selected after mouse-up and end any selection, so consecutive handwriting strokes never grab the previous stroke. Shapes, arrows, lines and stamps are still selected after drawing (the properties panel edits them), but only their handles react to the next press.
+  - Decision (review round 1, 2026-11-11): the original rule (handle **or selected element** manipulates) made the next stroke or arrow that starts on a just-drawn element drag it instead of drawing, which is hostile to Skitch-style markup.
 - Shortcuts:
   - Delete removes the selection, arrows nudge (Shift ×10), Esc deselects
   - ⌘Z / ⇧⌘Z undo/redo; ⌘C/⌘V copy/paste elements; ⇧⌘C copies the image
@@ -389,7 +391,7 @@
 - Create: `Tests/SkitchoUITests/ShapeToolTests.swift`
 
 - [x] drag creates the element with a live preview; Shift = square/circle/15° snap, Option = from center; minimum size, below which a click creates nothing
-- [x] the selection rule from Technical Details (handles/selected element → manipulate, else draw)
+- [x] the selection rule from Technical Details (handles → manipulate, else draw; revised in review round 1, see Technical Details)
 - [x] write tests: each tool's drag produces the expected kind/geometry, Shift snap, tiny click is a no-op, a drag starting on an unselected element draws a new one
 - [x] run tests. Must pass before task 17.
 

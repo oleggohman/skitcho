@@ -129,13 +129,16 @@ import struct SkitchoCore.Document
     #expect(!manager.canUndo)
   }
 
-  @Test func pressOnSelectedStampMovesItInsteadOfPlacing() {
+  /// Selection rule: the just placed (selected) stamp does not grab the next press; a new stamp is placed.
+  @Test func pressOnSelectedStampPlacesAnotherOne() {
     let (editor, manager) = makeEditor()
     let (tool, _) = makeTools(editor)
     press(tool, manager, from: CGPoint(x: 200, y: 200))
-    press(tool, manager, from: CGPoint(x: 200, y: 200), to: CGPoint(x: 260, y: 230))
-    #expect(editor.document.elements.count == 1)
-    #expect(stamp(editor)?.1 == CGPoint(x: 260, y: 230))
+    let first = editor.document.elements[0]
+    press(tool, manager, from: CGPoint(x: 205, y: 205), to: CGPoint(x: 260, y: 230))
+    #expect(editor.document.elements.count == 2)
+    #expect(editor.document.elements[0] == first)
+    #expect(editor.selection == [editor.document.elements[1].id])
   }
 
   @Test func attachLabelCreatesLinkedTextBesideStampInOneUndoStep() {

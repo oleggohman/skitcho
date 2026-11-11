@@ -228,20 +228,36 @@ import struct SkitchoCore.Document
     #expect(editor.selection == [editor.document.elements[1].id])
   }
 
-  @Test func dragStartingOnSelectedElementMovesIt() {
+  /// Selection rule: the body of the selected (just drawn) element does not grab the press; a new element starts.
+  @Test func dragStartingOnSelectedElementBodyDrawsNewOne() {
     let existing = Element(
       kind: .rect(CGRect(x: 100, y: 100, width: 100, height: 100), rounded: false),
       style: Style.make(tool: .rect, sizeStep: .default, color: .red, imageSize: CGSize(width: 800, height: 600)))
     let (editor, manager) = makeEditor(elements: [existing])
     editor.select(existing.id)
-    drag(controller(editor, .ellipse), manager, from: CGPoint(x: 125, y: 100), to: CGPoint(x: 165, y: 120))
-    #expect(editor.document.elements.count == 1)
-    guard case .rect(let rect, _) = editor.document.elements[0].kind else {
-      Issue.record("expected rect")
+    drag(controller(editor, .arrow), manager, from: CGPoint(x: 125, y: 100), to: CGPoint(x: 265, y: 220))
+    #expect(editor.document.elements.count == 2)
+    #expect(editor.document.elements[0] == existing)
+    guard case .arrow = editor.document.elements[1].kind else {
+      Issue.record("expected arrow")
       return
     }
-    #expect(rect == CGRect(x: 140, y: 120, width: 100, height: 100))
-    #expect(manager.undoActionName == "Move")
+    #expect(manager.undoActionName == "Add Arrow")
+  }
+
+  /// Handles of the selection still work with a drawing tool.
+  @Test func dragOnSelectedHandleResizesIt() throws {
+    let existing = Element(
+      kind: .rect(CGRect(x: 100, y: 100, width: 100, height: 100), rounded: false),
+      style: Style.make(tool: .rect, sizeStep: .default, color: .red, imageSize: CGSize(width: 800, height: 600)))
+    let (editor, manager) = makeEditor(elements: [existing])
+    editor.select(existing.id)
+    let corner = try #require(HandleLayout.position(of: .bottomRight, on: existing, zoom: 1))
+    drag(
+      controller(editor, .ellipse), manager, from: corner, to: CGPoint(x: corner.x + 40, y: corner.y + 20))
+    #expect(editor.document.elements.count == 1)
+    #expect(editor.document.elements[0].bounds.width > existing.bounds.width)
+    #expect(manager.undoActionName != "Add Ellipse")
   }
 
   @Test func canvasRegistersShapeControllers() {
