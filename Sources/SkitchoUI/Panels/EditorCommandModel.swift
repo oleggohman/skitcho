@@ -20,12 +20,14 @@ public final class EditorCommandModel {
   private let editor: EditorModel
   private let handle: CanvasHandle
   private let bridge: PasteboardBridge
-  /// Opens the resize panel (set by the window view).
-  public var beginResize: () -> Void = {}
+  /// The open resize panel, nil when closed (the window's bottom bar shows it).
+  public private(set) var resizeModel: ResizeModel?
+  /// Replaces opening the resize panel (tests); nil opens `resizeModel`.
+  public var beginResize: (() -> Void)?
   /// Failure of the last image operation, shown by the window as an alert.
   public var errorMessage: String?
-  /// Presents Export As… (replaced in tests).
-  public var presentExport: () -> Void = {}
+  /// Replaces presenting Export As… (tests); nil runs the save panel on the canvas window.
+  public var presentExport: (() -> Void)?
 
   public init(editor: EditorModel, handle: CanvasHandle, bridge: PasteboardBridge = PasteboardBridge()) {
     self.editor = editor
@@ -85,7 +87,8 @@ public final class EditorCommandModel {
     case .bringForward: editor.bringForward()
     case .sendBackward: editor.sendBackward()
     case .cropTool: editor.currentTool = .crop
-    case .resize: beginResize()
+    case .resize:
+      if let beginResize { beginResize() } else { showResize() }
     case .rotateLeft: attempt { try editor.rotate90(clockwise: false) }
     case .rotateRight: attempt { try editor.rotate90(clockwise: true) }
     case .flipHorizontal: attempt { try editor.flip(axis: .horizontal) }
@@ -93,13 +96,32 @@ public final class EditorCommandModel {
     case .expandCanvas: expandCanvas(.right)
     case .copyImage:
       return attempt { try bridge.writeImage(try DocumentRenderer.flatten(editor.document, scale: 1)) }
-    case .exportAs: presentExport()
+    case .exportAs:
+      if let presentExport { presentExport() } else { showExport() }
     case .zoomIn: handle.zoomIn()
     case .zoomOut: handle.zoomOut()
     case .actualSize: handle.actualSize()
     case .zoomToFit: handle.zoomToFit()
     }
     return true
+  }
+
+  /// Opens the resize panel; it closes itself after Apply or Cancel.
+  public func showResize() {
+    let model = ResizeModel(editor: editor)
+    model.onDismiss = { [weak self] in self?.resizeModel = nil }
+    resizeModel = model
+  }
+
+  /// Runs the Export As… save panel as a sheet on the canvas window.
+  private func showExport() {
+    let editor = editor
+    let window = handle.canvas?.window
+    ExportPresenter.present(
+      document: { editor.document },
+      suggestedName: DragOutSource.fileName(forDocumentName: window?.title),
+      window: window,
+      onError: { [weak self] in self?.errorMessage = $0 })
   }
 
   /// Grows the canvas by `expandAmount` pixels on `edge`.

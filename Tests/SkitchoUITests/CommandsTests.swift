@@ -235,6 +235,16 @@ import struct SkitchoCore.Document
     #expect(opened == 1)
   }
 
+  @Test func resizeCommandOpensAndCancelClosesThePanel() {
+    let editor = makeEditor()
+    let model = EditorCommandModel(editor: editor, handle: CanvasHandle())
+    #expect(model.resizeModel == nil)
+    #expect(model.perform(.resize))
+    #expect(model.resizeModel != nil)
+    model.resizeModel?.cancel()
+    #expect(model.resizeModel == nil)
+  }
+
   @Test func copyImageWritesPNGAndTIFF() {
     let pasteboard = privatePasteboard()
     defer { pasteboard.releaseGlobally() }

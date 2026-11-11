@@ -34,7 +34,10 @@ struct CanvasHost: NSViewRepresentable {
     let (scrollView, canvas) = CanvasView.makeScrollView(editor: editor)
     handle.attach(canvas)
     // The canvas takes the keyboard (tool shortcuts, Delete, arrows) as soon as it is in a window.
-    Task { @MainActor in canvas.window?.makeFirstResponder(canvas) }
+    Task { @MainActor [weak canvas] in
+      guard let canvas else { return }
+      canvas.window?.makeFirstResponder(canvas)
+    }
     return scrollView
   }
 
@@ -50,7 +53,6 @@ public struct EditorWindowView: View {
   private let editor: EditorModel
   @Environment(\.undoManager) private var undoManager
   @State private var handle: CanvasHandle
-  @State private var resize: ResizeModel?
   @State private var palette: ToolPaletteModel
   @State private var properties: PropertiesModel
   @State private var commands: EditorCommandModel
@@ -111,11 +113,9 @@ public struct EditorWindowView: View {
     } message: {
       Text(commands.errorMessage ?? "")
     }
-    .onAppear {
-      Self.bind(editor, to: undoManager)
-      commands.beginResize = { startResize() }
-      commands.presentExport = { presentExport() }
-    }
+    // The command model presents resize and export itself: closures stored on it must not capture this view,
+    // whose state storage owns the model (a retain cycle that would keep the closed window's editor alive).
+    .onAppear { Self.bind(editor, to: undoManager) }
     .onChange(of: undoManager) { _, new in Self.bind(editor, to: new) }
   }
 
@@ -125,10 +125,10 @@ public struct EditorWindowView: View {
         .font(Typography.caption.font())
         .foregroundStyle(BrandSemantic.caption.color)
       Spacer(minLength: Spacing.xs)
-      if let resize {
+      if let resize = commands.resizeModel {
         ResizeBar(model: resize)
       } else {
-        Button("Resize…") { startResize() }
+        Button("Resize…") { commands.showResize() }
           .buttonStyle(CZButtonStyle(.secondary, size: .small))
           .help("Resize, rotate or flip the image")
         DragOutHandle(source: dragOut)
@@ -169,21 +169,5 @@ public struct EditorWindowView: View {
       .accessibilityLabel("Fit to window")
     }
     .buttonStyle(CZButtonStyle(.transparent, size: .small))
-  }
-
-  private func presentExport() {
-    let editor = editor
-    let window = handle.canvas?.window
-    ExportPresenter.present(
-      document: { editor.document },
-      suggestedName: DragOutSource.fileName(forDocumentName: window?.title),
-      window: window,
-      onError: { commands.errorMessage = $0 })
-  }
-
-  private func startResize() {
-    let model = ResizeModel(editor: editor)
-    model.onDismiss = { resize = nil }
-    resize = model
   }
 }
