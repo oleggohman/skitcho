@@ -183,31 +183,31 @@
 - Create: `scripts/bundle.sh`, `scripts/test-bundle.sh`, `Resources/Info.plist.template`
 - Create: `.swift-format`, `.gitignore`, `LICENSE`, `.github/workflows/ci.yml`
 
-- [ ] `Package.swift`:
+- [x] `Package.swift`:
   - swift-tools 6.0 (Swift 6 mode by default), platform `.macOS(.v15)`, no unsafeFlags
   - targets `SkitchoCore`, `SkitchoUI`, `Skitcho` (executable), `SkitchoCoreTests`, `SkitchoUITests`
   - Sparkle 2 pinned `exact:` to the current 2.x release, linked by `Skitcho` only
-- [ ] `scripts/bundle.sh` (no `set -x` anywhere; Sparkle embedding is added in Task 28):
+- [x] `scripts/bundle.sh` (no `set -x` anywhere; Sparkle embedding is added in Task 28):
   - abort unless `uname -m` = `arm64` and `sysctl -n sysctl.proc_translated` ≠ 1
   - `BIN_DIR=$(swift build -c release --arch arm64 --show-bin-path)` after building
   - assemble `build/Skitcho.app` from Info.plist.template with version substitution; copy `*.bundle` from `$BIN_DIR` into `Contents/Resources` only if any exist
   - versions: `CFBundleShortVersionString` = `$VERSION` env or `0.0.0`; `CFBundleVersion` = `git rev-list --count HEAD` if `git rev-parse HEAD` succeeds, else `0` (the repo has no commits yet)
   - sign: ad-hoc `codesign -f -s -` by default, or `$SIGN_IDENTITY` with `-o runtime --timestamp`
   - finally assert `lipo -archs` = `arm64` for **every** Mach-O in the app (including `Contents/MacOS/Skitcho`)
-- [ ] `scripts/test-bundle.sh`: runs bundle.sh, then asserts:
+- [x] `scripts/test-bundle.sh`: runs bundle.sh, then asserts:
   - the Info.plist keys from Technical Details
   - every Mach-O is arm64-only
   - `codesign --verify --deep --strict` passes
   - no `*.ttf`/`*.otf` files in the repo or bundle
   - no `#[0-9a-fA-F]{6}` or `Color(hex:` literals in `Sources/` outside `AnnotationColor.swift`/`BrandColor.swift`, unless the line carries `// lint:allow-hex`
-- [ ] `.swift-format` (2-space, 120 cols); `.gitignore` (`.build/`, `build/`, `dist/`, `.swiftpm/`, `*.p12`, `*.p8`, `*.key`, `.env*`); `LICENSE` MIT "Copyright (c) 2026 Oleg Gohman"
-- [ ] `ci.yml`, on push/PR:
+- [x] `.swift-format` (2-space, 120 cols); `.gitignore` (`.build/`, `build/`, `dist/`, `.swiftpm/`, `*.p12`, `*.p8`, `*.key`, `.env*`); `LICENSE` MIT "Copyright (c) 2026 Oleg Gohman"
+- [x] `ci.yml`, on push/PR: (⚠️ runner `macos-26` is a placeholder: a hosted image with Xcode 27.x was not verified; the Xcode-select step fails loudly if none is present. Revisit when an Xcode 27 image exists)
   - `permissions: contents: read`; `actions/checkout` pinned by commit SHA with `fetch-depth: 0`
   - runner: the newest arm64 GitHub macOS image that ships Xcode 27.x (never an Intel runner)
   - `sudo xcode-select -s` that Xcode, then assert `swift --version` contains `6.4` and `uname -m` = `arm64`. If no hosted image has Xcode 27, record ⚠️ in this plan and gate the warning-free check on the pinned toolchain only
   - steps: build, lint, `swift test --arch arm64 --no-parallel`, `scripts/test-bundle.sh`
-- [ ] smoke tests: modules import; `#if !arch(arm64)` → `Issue.record`; `sysctl.proc_translated` == 0
-- [ ] run build, tests, lint and test-bundle. Must pass before task 2.
+- [x] smoke tests: modules import; `#if !arch(arm64)` → `Issue.record`; `sysctl.proc_translated` == 0
+- [x] run build, tests, lint and test-bundle. Must pass before task 2.
 
 ### Task 2: De-risk spike — DocumentGroup + `.skitcho` package + Swift 6 isolation
 

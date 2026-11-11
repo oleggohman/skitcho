@@ -1,0 +1,72 @@
+#!/usr/bin/env bash
+# Assemble build/Skitcho.app (arm64 only), sign it and assert every Mach-O is thin arm64.
+# Env: VERSION (default 0.0.0), SIGN_IDENTITY (default ad-hoc), SPARKLE_PUBLIC_ED_KEY (default empty).
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$ROOT"
+
+if [[ "$(uname -m)" != "arm64" ]]; then
+  echo "error: Skitcho builds on Apple silicon only (uname -m = $(uname -m))" >&2
+  exit 1
+fi
+if [[ "$(sysctl -n sysctl.proc_translated 2>/dev/null || echo 0)" == "1" ]]; then
+  echo "error: running under Rosetta translation; use a native arm64 shell" >&2
+  exit 1
+fi
+
+SHORT_VERSION="${VERSION:-0.0.0}"
+if git rev-parse HEAD >/dev/null 2>&1; then
+  BUILD_VERSION="$(git rev-list --count HEAD)"
+else
+  BUILD_VERSION="0"
+fi
+PUBLIC_KEY="${SPARKLE_PUBLIC_ED_KEY:-}"
+
+swift build -c release --arch arm64
+BIN_DIR="$(swift build -c release --arch arm64 --show-bin-path)"
+
+APP="$ROOT/build/Skitcho.app"
+rm -rf "$APP"
+mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
+
+cp "$BIN_DIR/Skitcho" "$APP/Contents/MacOS/Skitcho"
+
+sed -e "s|@SHORT_VERSION@|$SHORT_VERSION|g" \
+  -e "s|@BUILD_VERSION@|$BUILD_VERSION|g" \
+  -e "s|@SPARKLE_PUBLIC_ED_KEY@|$PUBLIC_KEY|g" \
+  Resources/Info.plist.template >"$APP/Contents/Info.plist"
+plutil -lint "$APP/Contents/Info.plist" >/dev/null
+
+# SwiftPM resource bundles, if any target declares resources.
+shopt -s nullglob
+for b in "$BIN_DIR"/*.bundle; do
+  cp -R "$b" "$APP/Contents/Resources/"
+done
+shopt -u nullglob
+
+if [[ -n "${SIGN_IDENTITY:-}" ]]; then
+  codesign -f -s "$SIGN_IDENTITY" -o runtime --timestamp "$APP"
+else
+  codesign -f -s - "$APP"
+fi
+codesign --verify --deep --strict "$APP"
+
+# Assert every Mach-O in the app is thin arm64.
+count=0
+while IFS= read -r -d '' f; do
+  if file -b "$f" | grep -q 'Mach-O'; then
+    archs="$(lipo -archs "$f")"
+    if [[ "$archs" != "arm64" ]]; then
+      echo "error: $f has archs '$archs', expected 'arm64'" >&2
+      exit 1
+    fi
+    count=$((count + 1))
+  fi
+done < <(find "$APP" -type f -print0)
+if [[ "$count" -lt 1 ]]; then
+  echo "error: no Mach-O found in $APP" >&2
+  exit 1
+fi
+
+echo "bundle ok: $APP (version $SHORT_VERSION build $BUILD_VERSION, $count Mach-O arm64)"

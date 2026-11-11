@@ -1,0 +1,42 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  build-test:
+    # Apple silicon runner only; never an Intel image.
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 0
+
+      - name: Select Xcode 27 and assert toolchain
+        run: |
+          XCODE="$(ls -d /Applications/Xcode_27*.app 2>/dev/null | sort -V | tail -n 1 || true)"
+          if [ -z "$XCODE" ]; then
+            echo "No Xcode 27.x on this runner image" >&2
+            ls -d /Applications/Xcode*.app >&2 || true
+            exit 1
+          fi
+          sudo xcode-select -s "$XCODE"
+          swift --version
+          swift --version 2>&1 | grep -q '6\.4'
+          test "$(uname -m)" = "arm64"
+
+      - name: Build
+        run: swift build --arch arm64
+
+      - name: Lint
+        run: swift format lint --strict --recursive Sources Tests
+
+      - name: Test
+        run: swift test --arch arm64 --no-parallel
+
+      - name: Bundle checks
+        run: scripts/test-bundle.sh
