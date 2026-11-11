@@ -44,7 +44,10 @@ public final class EditorModel {
   }
 
   /// Replaces the document with `snapshot` and registers the inverse, so undo and redo alternate.
+  /// A running gesture is cancelled first: its live edits are dropped (redo then returns to the committed
+  /// state) and a later `commitInteractive` cannot register a step against the stale snapshot.
   public func restore(_ snapshot: Document, _ name: String) {
+    cancelInteractive()
     let current = document
     document = snapshot
     pruneSelection()
@@ -129,7 +132,8 @@ public final class EditorModel {
     perform(name) { $0.elements.removeAll { ids.contains($0.id) } }
   }
 
-  public func removeSelection() { remove(ids: selection) }
+  /// Deletes the selection together with the linked labels of selected stamps.
+  public func removeSelection() { remove(ids: moveTargets(of: selection)) }
 
   /// The IDs that move with `ids`: the elements themselves plus the linked label of every stamp among them.
   /// A set, so a label that is also selected is counted once.
@@ -149,7 +153,7 @@ public final class EditorModel {
 
   /// Moves the selection (and the linked labels of selected stamps) by `delta` as one undo step.
   public func moveSelection(by delta: CGPoint, name: String = "Move") {
-    guard delta != .zero else { return }
+    guard delta != .zero, delta.x.isFinite, delta.y.isFinite else { return }
     let ids = moveTargets(of: selection)
     perform(name) { document in
       document.elements = document.elements.map { ids.contains($0.id) ? $0.translated(by: delta) : $0 }
@@ -227,8 +231,27 @@ public final class EditorModel {
     updateSelection("Change Size") { element in
       let fresh = Style.make(
         tool: EditorModel.styleTool(of: element), sizeStep: step, color: element.style.color, imageSize: canvas)
+      let anchor = EditorModel.sizeAnchor(of: element)
       element.style = fresh
+      // The rotation pivot (center of `baseBounds`) depends on the size of text and stamps: keep the
+      // on-screen anchor where it was so a rotated element does not jump.
+      if let before = anchor, let after = EditorModel.sizeAnchor(of: element) {
+        element = element.translated(by: before - after)
+      }
     }
+  }
+
+  /// Where a text's origin or a stamp's center is drawn (rotation applied); nil for kinds whose geometry
+  /// does not depend on the style.
+  private static func sizeAnchor(of element: Element) -> CGPoint? {
+    let point: CGPoint
+    switch element.kind {
+    case .text(let content): point = content.origin
+    case .stamp(_, let center, _, _): point = center
+    default: return nil
+    }
+    guard element.rotation != 0 else { return point }
+    return GeometryMath.rotate(point, about: element.baseBounds.center, by: element.rotation)
   }
 
   /// Toggles the styled ("bubble") outline of the selected text elements, else of the next text element.
@@ -294,8 +317,9 @@ public final class EditorModel {
 
   // MARK: Element clipboard
 
-  /// Encoded copy of the selection, or nil when nothing is selected.
-  public func copySelectionData() -> Data? { ElementClipboard.encode(selectedElements) }
+  /// Encoded copy of the selection (plus the linked labels of selected stamps, so the link survives a paste),
+  /// or nil when nothing is selected.
+  public func copySelectionData() -> Data? { ElementClipboard.encode(movingElements) }
 
   /// Pastes elements decoded from `data` (new IDs, offset +10) on top and selects them.
   /// Returns false and changes nothing when the data is not valid clipboard content.

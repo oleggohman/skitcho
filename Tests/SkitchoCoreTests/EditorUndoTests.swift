@@ -4,6 +4,16 @@ import Testing
 
 @testable import SkitchoCore
 
+/// Counts undo registrations, so a test can tell one step from several collapsed into one undo group.
+final class CountingUndoManager: UndoManager {
+  private(set) var registrations = 0
+
+  override func __registerUndoWithTarget(_ target: Any, handler: @escaping @MainActor (Any) -> Void) {
+    registrations += 1
+    super.__registerUndoWithTarget(target, handler: handler)
+  }
+}
+
 @MainActor
 @Suite struct EditorUndoTests {
   private func makeEditor() -> (EditorModel, UndoManager) {
@@ -72,18 +82,21 @@ import Testing
   }
 
   @Test func interactiveGestureIsOneUndoStep() {
-    let (editor, manager) = makeEditor()
+    let manager = CountingUndoManager()
+    manager.groupsByEvent = false
+    let editor = EditorModel(document: Document.blank(size: CGSize(width: 200, height: 100)), undoManager: manager)
     let element = rectElement()
     step(manager) { editor.add(element) }
     let original = editor.document
 
-    step(manager) {
-      editor.beginInteractive()
-      for _ in 0..<5 {
-        editor.document.elements = editor.document.elements.map { $0.translated(by: CGPoint(x: 3, y: 0)) }
-      }
-      editor.commitInteractive(name: "Move")
+    // Live updates run outside any undo group: a registration there would raise, and the commit is counted.
+    editor.beginInteractive()
+    for _ in 0..<5 {
+      editor.document.elements = editor.document.elements.map { $0.translated(by: CGPoint(x: 3, y: 0)) }
     }
+    let before = manager.registrations
+    step(manager) { editor.commitInteractive(name: "Move") }
+    #expect(manager.registrations == before + 1)
     #expect(manager.undoActionName == "Move")
     #expect(editor.document.elements[0].bounds.minX == element.bounds.minX + 15)
 
@@ -94,6 +107,84 @@ import Testing
     manager.undo()
     manager.undo()  // the add
     #expect(editor.document.elements.isEmpty)
+  }
+
+  @Test func undoDuringGestureCancelsItAndKeepsHistoryIntact() {
+    let manager = CountingUndoManager()
+    manager.groupsByEvent = false
+    let editor = EditorModel(document: Document.blank(size: CGSize(width: 200, height: 100)), undoManager: manager)
+    let element = rectElement()
+    step(manager) { editor.add(element) }
+
+    // Cmd-Z while dragging: the gesture is dropped and the add is undone.
+    editor.beginInteractive()
+    editor.document.elements = editor.document.elements.map { $0.translated(by: CGPoint(x: 20, y: 0)) }
+    manager.undo()
+    #expect(editor.document.elements.isEmpty)
+    #expect(!editor.isInteracting)
+    #expect(!manager.canUndo)
+
+    // Redo returns the committed element, not the half-dragged one.
+    manager.redo()
+    #expect(editor.document.elements == [element])
+
+    // The late commit from the gesture's mouse-up registers nothing against the stale snapshot.
+    let before = manager.registrations
+    step(manager) { editor.commitInteractive(name: "Move") }
+    #expect(manager.registrations == before)
+    #expect(manager.undoActionName != "Move")
+  }
+
+  @Test func nonFiniteMoveIsIgnored() {
+    let (editor, manager) = makeEditor()
+    let element = rectElement()
+    step(manager) { editor.add(element) }
+    let before = editor.document
+    for delta in [CGPoint(x: Double.nan, y: 0), CGPoint(x: 0, y: -Double.infinity)] {
+      // No group: a registration here would raise, so this also proves nothing is registered.
+      editor.moveSelection(by: delta)
+      #expect(editor.document == before)
+    }
+    #expect(manager.undoActionName != "Move")
+  }
+
+  @Test func sizeStepKeepsRotatedTextAndStampsInPlace() {
+    let (editor, manager) = makeEditor()
+    let canvas = editor.document.canvasSize
+    let textStyle = Style.make(tool: .text, sizeStep: .xs, imageSize: canvas)
+    let text = Element(
+      kind: .text(TextContent(string: "Rotated", origin: CGPoint(x: 40, y: 30))), style: textStyle,
+      rotation: .pi / 2)
+    let stamp = Element(
+      kind: .stamp(.approve, center: CGPoint(x: 120, y: 50), tailAngle: 0.4, labelID: nil),
+      style: Style.make(tool: .stamp, sizeStep: .xs, imageSize: canvas), rotation: .pi / 2)
+    let plain = Element(kind: .text(TextContent(string: "Plain", origin: CGPoint(x: 10, y: 70))), style: textStyle)
+    step(manager) { for element in [text, stamp, plain] { editor.add(element) } }
+
+    /// Where the anchor (text origin, stamp center) is drawn once rotation is applied.
+    func drawnAnchor(_ element: Element) -> CGPoint {
+      let point: CGPoint
+      switch element.kind {
+      case .text(let content): point = content.origin
+      case .stamp(_, let center, _, _): point = center
+      default: fatalError("unexpected kind")
+      }
+      return GeometryMath.rotate(point, about: element.baseBounds.center, by: element.rotation)
+    }
+    let anchorsBefore = editor.document.elements.map(drawnAnchor)
+    let boundsBefore = editor.document.elements.map(\.bounds)
+
+    editor.selectAll()
+    step(manager) { editor.applySizeStep(.xl) }
+    let after = editor.document.elements
+    // The sizes did change...
+    for (old, new) in zip(boundsBefore, after.map(\.bounds)) { #expect(new.width > old.width) }
+    // ...but every drawn anchor stayed put, and the unrotated text kept its origin.
+    for (old, new) in zip(anchorsBefore, after.map(drawnAnchor)) {
+      #expect(abs(old.x - new.x) < 1e-6 && abs(old.y - new.y) < 1e-6, "\(old) vs \(new)")
+    }
+    guard case .text(let content) = after[2].kind else { fatalError("expected text") }
+    #expect(content.origin == CGPoint(x: 10, y: 70))
   }
 
   @Test func cancelInteractiveRevertsWithoutRegistering() {
