@@ -1,0 +1,95 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+
+jobs:
+  release:
+    # Apple silicon runner only; never an Intel image.
+    runs-on: macos-26
+    # Protected environment: configure a required reviewer (see docs/RELEASING.md).
+    environment: release
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 0
+
+      - name: Verify the tagged commit is on main
+        run: |
+          git fetch origin main
+          if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
+            echo "Tagged commit $GITHUB_SHA is not an ancestor of origin/main" >&2
+            exit 1
+          fi
+
+      - name: Select Xcode 27 and assert toolchain
+        run: |
+          XCODE="$(ls -d /Applications/Xcode_27*.app 2>/dev/null | sort -V | tail -n 1 || true)"
+          if [ -z "$XCODE" ]; then
+            echo "No Xcode 27.x on this runner image" >&2
+            ls -d /Applications/Xcode*.app >&2 || true
+            exit 1
+          fi
+          sudo xcode-select -s "$XCODE"
+          swift --version
+          swift --version 2>&1 | grep -q '6\.4'
+          test "$(uname -m)" = "arm64"
+
+      - name: Test
+        run: swift test --arch arm64 --no-parallel
+
+      - name: Import signing certificate and notarization key
+        env:
+          DEVELOPER_ID_P12_BASE64: ${{ secrets.DEVELOPER_ID_P12_BASE64 }}
+          DEVELOPER_ID_P12_PASSWORD: ${{ secrets.DEVELOPER_ID_P12_PASSWORD }}
+          APPLE_PRIVATE_KEY: ${{ secrets.ApplePrivateKey }}
+          APPLE_IDENTITY: ${{ secrets.AppleIDENTITY }}
+        run: |
+          umask 077
+          CERT_PATH="$RUNNER_TEMP/cert.p12"
+          P8_PATH="$RUNNER_TEMP/AuthKey.p8"
+          KEYCHAIN="$RUNNER_TEMP/build.keychain-db"
+          printf '%s' "$DEVELOPER_ID_P12_BASE64" | base64 --decode > "$CERT_PATH"
+          printf '%s' "$APPLE_PRIVATE_KEY" > "$P8_PATH"
+          KC_PW="$(openssl rand -base64 32)"
+          EXISTING="$(security list-keychains -d user | tr -d '"')"
+          security create-keychain -p "$KC_PW" "$KEYCHAIN"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN"
+          security unlock-keychain -p "$KC_PW" "$KEYCHAIN"
+          security import "$CERT_PATH" -k "$KEYCHAIN" -P "$DEVELOPER_ID_P12_PASSWORD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KC_PW" "$KEYCHAIN" > /dev/null
+          # Unquoted on purpose: EXISTING is a whitespace-separated keychain list.
+          # shellcheck disable=SC2086
+          security list-keychains -d user -s "$KEYCHAIN" $EXISTING
+          {
+            echo "ASC_KEY_PATH=$P8_PATH"
+            echo "SIGN_IDENTITY=$APPLE_IDENTITY"
+          } >> "$GITHUB_ENV"
+
+      - name: Build, sign, notarize and prepare appcast
+        env:
+          AppleStoreAPIKey: ${{ secrets.AppleStoreAPIKey }}
+          AppleIssuerID: ${{ secrets.AppleIssuerID }}
+          SPARKLE_ED_PRIVATE_KEY: ${{ secrets.SPARKLE_ED_PRIVATE_KEY }}
+          SPARKLE_PUBLIC_ED_KEY: ${{ vars.SPARKLE_PUBLIC_ED_KEY }}
+        run: scripts/release.sh "${GITHUB_REF_NAME#v}"
+
+      - name: Publish GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" dist/Skitcho-*.zip dist/appcast.xml \
+            --generate-notes --verify-tag
+
+      - name: Clean up keychain and key files
+        if: always()
+        run: |
+          security delete-keychain "$RUNNER_TEMP/build.keychain-db" || true
+          rm -f "$RUNNER_TEMP/cert.p12" "$RUNNER_TEMP/AuthKey.p8"

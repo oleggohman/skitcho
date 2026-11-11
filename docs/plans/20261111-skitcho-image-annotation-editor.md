@@ -597,23 +597,23 @@
 **Files:**
 - Create: `.github/workflows/release.yml`, `docs/RELEASING.md`
 
-- [ ] `release.yml` setup:
+- [x] `release.yml` setup:
   - trigger: tag `v*`; a single job with `environment: release` (protected: required reviewer)
   - top-level `permissions: contents: read`; the job gets `contents: write`
   - every third-party action pinned by commit SHA; `actions/checkout` with `fetch-depth: 0`
   - verify the tagged commit is on `main` (`git merge-base --is-ancestor "$GITHUB_SHA" origin/main`)
   - runner and toolchain: same arm64 runner, Xcode selection and version assert as `ci.yml`
-- [ ] secrets (env only, `umask 077`):
+- [x] secrets (env only, `umask 077`):
   - decode the `.p12` and the `ApplePrivateKey` `.p8` into `$RUNNER_TEMP`; export the `.p8` path as `ASC_KEY_PATH` and `SIGN_IDENTITY="$AppleIDENTITY"` for release.sh
   - random `KC_PW`
   - `security create-keychain` → `set-keychain-settings -lut 21600` → `unlock-keychain` → `import cert.p12 -P … -T /usr/bin/codesign` → `set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KC_PW"` → `list-keychains -d user -s build.keychain <existing>`
-- [ ] steps: tests, then `scripts/release.sh "${GITHUB_REF_NAME#v}"`, then a single `gh release create "$GITHUB_REF_NAME" dist/Skitcho-*.zip dist/appcast.xml --generate-notes --verify-tag` (not a prerelease, so `latest` moves) with `GH_TOKEN: ${{ github.token }}`
-- [ ] `if: always()` cleanup step deletes the keychain, the `.p12` and the `.p8`
-- [ ] `docs/RELEASING.md`:
+- [x] steps: tests, then `scripts/release.sh "${GITHUB_REF_NAME#v}"`, then a single `gh release create "$GITHUB_REF_NAME" dist/Skitcho-*.zip dist/appcast.xml --generate-notes --verify-tag` (not a prerelease, so `latest` moves) with `GH_TOKEN: ${{ github.token }}`
+- [x] `if: always()` cleanup step deletes the keychain, the `.p12` and the `.p8`
+- [x] `docs/RELEASING.md`:
   - create the Sparkle key once with `generate_keys`; export it with `generate_keys -x` into secret `SPARKLE_ED_PRIVATE_KEY`; put the public key in repo variable `SPARKLE_PUBLIC_ED_KEY`
   - the other secrets, the protected `release` environment, tagging, and verifying with `spctl`
-- [ ] write test: `actionlint` if available (otherwise a YAML parse via `python3 -c 'import yaml'` or `ruby -ryaml`) on both workflows; grep check that no workflow uses `set -x` or `echo` with a secret var, and that every `uses:` is SHA-pinned
-- [ ] run tests. Must pass before task 32.
+- [x] write test: `actionlint` if available (otherwise a YAML parse via `python3 -c 'import yaml'` or `ruby -ryaml`) on both workflows; grep check that no workflow uses `set -x` or `echo` with a secret var, and that every `uses:` is SHA-pinned
+- [x] run tests. Must pass before task 32.
 
 ### Task 32: Verify acceptance criteria
 - [ ] every Overview feature is wired: open (dialog/Dock drop/clipboard/blank), all tools including V/pan, properties, handles, undo/redo, arrange, crop/resize/expand/rotate/flip, pixelate, `.skitcho` save/reopen, export PNG/JPEG/TIFF/2×, copy, drag-out, Check for Updates
