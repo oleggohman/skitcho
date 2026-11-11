@@ -294,9 +294,9 @@
 - Modify: `Sources/SkitchoCore/Render/DocumentRenderer.swift`
 - Create: `Tests/SkitchoCoreTests/RendererTextTests.swift`
 
-- [ ] CoreText framesetter with the system font (content stays independent of installed fonts); styled = outline (contrasting color, width ∝ fontSize) under fill; plain = fill only; wrap width; `TextRenderer.size(for:)`
-- [ ] write tests: measure grows with string and wraps at wrapWidth, glyphs are not mirrored (ink bounding box above baseline in document space), styled draws the outline color at the glyph edge
-- [ ] run tests. Must pass before task 9.
+- [x] CoreText framesetter with the system font (content stays independent of installed fonts); styled = outline (contrasting color, width ∝ fontSize) under fill; plain = fill only; wrap width; `TextRenderer.size(for:)`
+- [x] write tests: measure grows with string and wraps at wrapWidth, glyphs are not mirrored (ink bounding box above baseline in document space), styled draws the outline color at the glyph edge
+- [x] run tests. Must pass before task 9.
 
 ### Task 9: Renderer — stamps
 

@@ -15,20 +15,6 @@ public struct TextContent: Sendable, Equatable, Codable {
     self.wrapWidth = wrapWidth
     self.styled = styled
   }
-
-  /// Rough text extent used for bounds until the CoreText measurer exists. Monospace-ish estimate.
-  func estimatedSize(fontSize: Double) -> CGSize {
-    let glyph = fontSize * 0.55
-    let lineHeight = fontSize * 1.2
-    let lines = string.split(separator: "\n", omittingEmptySubsequences: false)
-    let longest = Double(lines.map(\.count).max() ?? 0)
-    guard let wrap = wrapWidth, wrap > 0 else {
-      return CGSize(width: max(glyph, longest * glyph), height: Double(max(1, lines.count)) * lineHeight)
-    }
-    let perLine = max(1, (wrap / glyph).rounded(.down))
-    let rows = lines.reduce(0.0) { $0 + max(1, (Double($1.count) / perLine).rounded(.up)) }
-    return CGSize(width: wrap, height: max(1, rows) * lineHeight)
-  }
 }
 
 /// The geometry of an element, stored in document space (top-left origin, y-down).
@@ -72,7 +58,7 @@ public struct Element: Sendable, Equatable, Codable, Identifiable {
     case .freehand(let segments, _):
       return Element.bounds(of: segments)
     case .text(let content):
-      return CGRect(origin: content.origin, size: content.estimatedSize(fontSize: style.fontSize))
+      return CGRect(origin: content.origin, size: TextRenderer.size(for: content, fontSize: style.fontSize))
     case .stamp(_, let center, let tailAngle, _):
       let radius = StampKind.radius(strokeWidth: style.strokeWidth)
       var box = CGRect(x: center.x - radius, y: center.y - radius, width: 2 * radius, height: 2 * radius)

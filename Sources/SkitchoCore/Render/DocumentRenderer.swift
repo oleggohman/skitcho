@@ -119,8 +119,11 @@ public enum DocumentRenderer {
         stroke(path, style: style, in: context, scale: scale, shadows: shadows)
       }
 
-    case .text, .stamp:
-      // Text and stamps are drawn by their own renderers (later tasks).
+    case .text(let content):
+      TextRenderer.draw(content, style: style, rotation: element.rotation, in: context)
+
+    case .stamp:
+      // Stamps are drawn by their own renderer (a later task).
       break
     }
   }
