@@ -282,10 +282,10 @@
 - Create: `Sources/SkitchoCore/Render/DocumentRenderer.swift`
 - Create: `Tests/SkitchoCoreTests/RendererShapeTests.swift`
 
-- [ ] `draw(document, in:, scale:, excluding:, shadows:)` applies the single y-flip rule. It draws the background and base image at imageOrigin, then shapes/arrows/freehand with an optional soft shadow; the highlighter uses multiply blend at 0.4 alpha
-- [ ] `flatten(document, scale:) -> CGImage` (sRGB RGBA8)
-- [ ] write tests: **orientation** (image with red top-left quadrant renders red at output top-left), stroke pixel color, interior untouched, highlighter darkens without replacing, 2× dimensions
-- [ ] run tests. Must pass before task 8.
+- [x] `draw(document, in:, scale:, excluding:, shadows:)` applies the single y-flip rule. It draws the background and base image at imageOrigin, then shapes/arrows/freehand with an optional soft shadow; the highlighter uses multiply blend at 0.4 alpha
+- [x] `flatten(document, scale:) -> CGImage` (sRGB RGBA8)
+- [x] write tests: **orientation** (image with red top-left quadrant renders red at output top-left), stroke pixel color, interior untouched, highlighter darkens without replacing, 2× dimensions
+- [x] run tests. Must pass before task 8.
 
 ### Task 8: Renderer — text
 
