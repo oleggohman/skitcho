@@ -283,7 +283,6 @@ public struct PropertiesPanel: View {
     .controlSize(.small)
     .font(Typography.caption.font())
     .help("Styled text has a contrasting outline; plain text has none")
-    .accessibilityLabel("Styled text")
   }
 
   private var arrowToggle: some View {
@@ -295,6 +294,5 @@ public struct PropertiesPanel: View {
     .controlSize(.small)
     .font(Typography.caption.font())
     .help("Put an arrow head on both ends")
-    .accessibilityLabel("Double-headed arrow")
   }
 }

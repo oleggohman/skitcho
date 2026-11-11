@@ -89,6 +89,15 @@ final class DragOutHandleView: NSView, NSDraggingSource {
 
   override var intrinsicContentSize: NSSize { NSSize(width: 28, height: 22) }
 
+  // The handle draws its own icon, so it describes itself to VoiceOver. Dragging is mouse-only; the help
+  // names the keyboard route.
+  override func isAccessibilityElement() -> Bool { true }
+  override func accessibilityRole() -> NSAccessibility.Role? { .image }
+  override func accessibilityLabel() -> String? { "Drag image out" }
+  override func accessibilityHelp() -> String? {
+    "Drag the image into another app or folder. To save it with the keyboard, use File, Export As."
+  }
+
   override func draw(_ dirtyRect: NSRect) {
     guard
       let image = NSImage(

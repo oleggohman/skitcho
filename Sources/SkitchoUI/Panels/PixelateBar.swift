@@ -37,6 +37,8 @@ struct PixelateBar: View {
           in: Self.range
         )
         .frame(width: 140)
+        .accessibilityLabel("Block size")
+        .accessibilityValue("\(blockSize) pixels")
         Text("\(blockSize) px")
           .font(Typography.caption.font())
           .foregroundStyle(BrandColor.mediumGray.color)

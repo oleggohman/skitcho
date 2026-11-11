@@ -101,6 +101,7 @@ struct ExportAccessoryView: View {
         HStack(spacing: Spacing.xs) {
           Text("Quality")
           Slider(value: $model.jpegQuality, in: 0.1...1)
+            .accessibilityLabel("JPEG quality")
           Text("\(Int((model.jpegQuality * 100).rounded()))%")
             .monospacedDigit()
             .frame(minWidth: 40, alignment: .trailing)

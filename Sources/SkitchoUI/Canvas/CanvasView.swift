@@ -113,6 +113,19 @@ public final class CanvasView: NSView {
   public override var isFlipped: Bool { true }
   public override var acceptsFirstResponder: Bool { true }
 
+  // MARK: Accessibility
+
+  // A group, so the option bars and the text editor inside it stay reachable.
+  public override func isAccessibilityElement() -> Bool { true }
+  public override func accessibilityRole() -> NSAccessibility.Role? { .group }
+  public override func accessibilityLabel() -> String? { "Canvas" }
+  public override func accessibilityValue() -> Any? {
+    let size = editor.document.canvasSize
+    let count = editor.document.elements.count
+    return "\(Int(size.width.rounded())) by \(Int(size.height.rounded())) pixels, "
+      + "\(count) \(count == 1 ? "annotation" : "annotations"), \(editor.selection.count) selected"
+  }
+
   // MARK: Controllers
 
   /// Registers the controller used while `tool` is current. Tools without a controller use the V tool's.

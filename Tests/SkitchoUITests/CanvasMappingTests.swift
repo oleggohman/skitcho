@@ -136,6 +136,18 @@ import struct SkitchoCore.Document
     #expect(near(CGPoint(x: after.x - clip.bounds.minX, y: after.y - clip.bounds.minY), CGPoint(x: 50, y: 60)))
   }
 
+  @Test func canvasAndDragHandleDescribeThemselves() {
+    let (editor, _) = makeEditor(elements: [rect(10, 10)])
+    let canvas = CanvasView(editor: editor)
+    #expect(canvas.isAccessibilityElement())
+    #expect(canvas.accessibilityRole() == .group)
+    #expect(canvas.accessibilityLabel() == "Canvas")
+    #expect(canvas.accessibilityValue() as? String == "400 by 300 pixels, 1 annotation, 0 selected")
+    let handle = DragOutHandleView()
+    #expect(handle.isAccessibilityElement())
+    #expect(handle.accessibilityLabel() == "Drag image out")
+  }
+
   @Test func canvasSizeChangeResizesFrame() {
     let (editor, _) = makeEditor()
     let canvas = CanvasView(editor: editor)
