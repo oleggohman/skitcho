@@ -26,6 +26,8 @@ public final class EditorCommandModel {
   public var beginResize: (() -> Void)?
   /// Failure of the last image operation, shown by the window as an alert.
   public var errorMessage: String?
+  /// Save, Save As… and the document commands of this window's File menu. Set by the window view.
+  public var saveCoordinator: SaveCoordinator?
   /// Replaces presenting Export As… (tests); nil runs the save panel on the canvas window.
   public var presentExport: (() -> Void)?
 
@@ -61,6 +63,19 @@ public final class EditorCommandModel {
       return !editing && !editor.isInteracting
     case .zoomIn, .zoomOut, .actualSize, .zoomToFit: return handle.canvas != nil
     }
+  }
+
+  // MARK: File menu
+
+  /// Whether a File menu item is enabled for this window's document. Close is not routed here.
+  public func isEnabled(_ item: FileMenuItem) -> Bool {
+    saveCoordinator?.isEnabled(item) ?? false
+  }
+
+  /// Runs a File menu item on this window's document.
+  @discardableResult
+  public func perform(_ item: FileMenuItem) -> Bool {
+    saveCoordinator?.perform(item) ?? false
   }
 
   // MARK: Actions

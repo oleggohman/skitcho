@@ -71,7 +71,7 @@ public struct EditorWindowView: View {
   @State private var properties: PropertiesModel
   @State private var commands: EditorCommandModel
   @State private var dragOut: DragOutSource
-  /// Save and Save As for this window (the File menu reaches it in a later step).
+  /// Save, Save As and the document commands for this window (the File menu reaches it through `commands`).
   @State private var saver: SaveCoordinator
   /// The file `DocumentGroup` opened this document from; a fallback for the save coordinator when the
   /// window's `NSDocument` has no URL. Passed on at appear and on change, never cached by the coordinator.
@@ -82,13 +82,16 @@ public struct EditorWindowView: View {
     self.fileURL = fileURL
     let handle = document.canvasHandle
     _handle = State(initialValue: handle)
-    _commands = State(initialValue: EditorCommandModel(editor: document.editor, handle: handle))
+    let commands = EditorCommandModel(editor: document.editor, handle: handle)
+    _commands = State(initialValue: commands)
     let editor = document.editor
     _dragOut = State(
       initialValue: DragOutSource(
         document: { editor.document },
         documentName: { [weak handle] in handle?.canvas?.window?.title }))
-    _saver = State(initialValue: SaveCoordinator(editor: document.editor, handle: handle))
+    let saver = SaveCoordinator(editor: document.editor, handle: handle)
+    _saver = State(initialValue: saver)
+    commands.saveCoordinator = saver
     _palette = State(initialValue: ToolPaletteModel(editor: document.editor))
     _properties = State(
       initialValue: PropertiesModel(

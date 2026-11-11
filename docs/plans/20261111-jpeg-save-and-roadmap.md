@@ -267,14 +267,14 @@ The maintainer is away and asked for autonomous execution. Decisions not settled
 - Modify: `Sources/Skitcho/Commands.swift`, `Sources/SkitchoUI/Panels/EditorCommandModel.swift`
 - Modify: `Tests/SkitchoUITests/CommandsTests.swift`
 
-- [ ] add the accessory popup (JPEG default, Skitcho) using the project tokens; changing it updates `allowedContentTypes` and the extension; wire it into the coordinator's real `presentPanel`
-- [ ] replace `.saveItem` and re-add Close ⌘W, Save ⌘S, Save As… ⇧⌘S, Duplicate (no shortcut), Revert to Saved, Rename… and Move To…, routed to the key window, with enablement as in Technical Details
-- [ ] write tests:
+- [x] add the accessory popup (JPEG default, Skitcho) using the project tokens; changing it updates `allowedContentTypes` and the extension; wire it into the coordinator's real `presentPanel`
+- [x] replace `.saveItem` and re-add Close ⌘W, Save ⌘S, Save As… ⇧⌘S, Duplicate (no shortcut), Revert to Saved, Rename… and Move To…, routed to the key window, with enablement as in Technical Details
+- [x] write tests:
   - the File-menu table exposes all re-added items with the right shortcuts
   - Close is enabled when a non-document window (About/Settings) is key
   - enablement: Revert, Rename and Move only for saved `.skitcho` documents; Save and Save As for every document window
   - the popup changes the allowed type and extension
-- [ ] run tests — must pass before task 8
+- [x] run tests — must pass before task 8
 
 ### Task 8: Verify acceptance criteria
 - [ ] every Overview item is implemented and tested; `docs/backlog/` no longer holds the 4 items

@@ -100,6 +100,28 @@ public final class SaveCoordinator {
     }
   }
 
+  /// Runs a File menu item on this window's document. Returns false when it is disabled or has no document.
+  /// Close is not handled here: the menu sends it to the key window directly.
+  @discardableResult
+  public func perform(_ item: FileMenuItem) -> Bool {
+    guard isEnabled(item), let nsDocument = resolveDocument(window()) else { return false }
+    switch item {
+    case .close: return false
+    case .save: save()
+    case .saveAs: saveAs()
+    case .duplicate: nsDocument.duplicate(nil)
+    case .revertToSaved: nsDocument.revertToSaved(nil)
+    case .rename: nsDocument.rename(nil)
+    case .moveTo: nsDocument.move(nil)
+    }
+    return true
+  }
+
+  /// Whether `item` is available for this window's document.
+  public func isEnabled(_ item: FileMenuItem) -> Bool {
+    item.isEnabled(hasKeyWindow: true, document: resolveDocument(window()))
+  }
+
   // MARK: Document access
 
   /// The window's document: the controller's lookup first, then the window controller's link.
@@ -109,7 +131,7 @@ public final class SaveCoordinator {
   }
 
   /// A `.skitcho` document that already has a file: the only kind the document system saves.
-  private static func isSkitchoFile(_ nsDocument: NSDocument) -> Bool {
+  static func isSkitchoFile(_ nsDocument: NSDocument) -> Bool {
     guard nsDocument.fileURL != nil, let type = nsDocument.fileType.flatMap({ UTType($0) }) else { return false }
     return type.conforms(to: .skitchoDocument)
   }
@@ -193,18 +215,18 @@ public final class SaveCoordinator {
 
   // MARK: Default panel
 
-  /// A plain `NSSavePanel` as a window sheet (JPEG, or `.skitcho` when the typed extension says so).
-  /// TODO(Task 7): replace with the panel that has the JPEG/Skitcho format accessory popup.
+  /// The Save panel as a window sheet, with the JPEG/Skitcho format popup as its accessory.
   static func defaultPanel(window: @escaping () -> NSWindow?) -> PanelPresenter {
     { request, completion in
       let panel = NSSavePanel()
-      panel.allowedContentTypes = [.jpeg, .skitchoDocument]
-      panel.nameFieldStringValue = request.suggestedName + "." + request.defaultFormat.fileExtension
+      panel.nameFieldStringValue = request.suggestedName
       panel.directoryURL = request.directory
+      panel.canCreateDirectories = true
+      let accessory = SaveFormatAccessoryView(panel: panel, initial: request.defaultFormat)
+      panel.accessoryView = accessory
       let finish: (NSApplication.ModalResponse) -> Void = { response in
         guard response == .OK, let url = panel.url else { return completion(nil) }
-        let format: SaveFormat = url.pathExtension.lowercased() == SaveFormat.skitcho.fileExtension ? .skitcho : .jpeg
-        completion(SavePanelChoice(url: url, format: format))
+        completion(SavePanelChoice(url: url, format: accessory.selectedFormat))
       }
       if let window = window() {
         panel.beginSheetModal(for: window, completionHandler: finish)

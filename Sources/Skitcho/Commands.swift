@@ -4,7 +4,7 @@ import SkitchoUI
 import SwiftUI
 
 /// The menu bar. Commands act on the key window's editor through the `editorCommands` focused value; the
-/// enablement rules live in `EditorCommandModel`. Undo/Redo, New, Open and Save come from `DocumentGroup`.
+/// enablement rules live in `EditorCommandModel`. Undo/Redo, New and Open come from `DocumentGroup`; the File menu's save group is `FileMenuItem`.
 struct SkitchoCommands: Commands {
   let updater: UpdaterController
   @FocusedValue(\.editorCommands) private var editor
@@ -22,6 +22,22 @@ struct SkitchoCommands: Commands {
     CommandGroup(after: .newItem) {
       Button("New from Clipboard") { newFromClipboard() }
         .keyboardShortcut("n", modifiers: [.command, .option])
+    }
+
+    // Replaces Close, Save, Save As/Duplicate and Revert: Save writes a JPEG by default (see `SaveCoordinator`).
+    // Close goes straight to the key window so it also works in the About and Settings windows.
+    CommandGroup(replacing: .saveItem) {
+      Button(FileMenuItem.close.title) { NSApp.keyWindow?.performClose(nil) }
+        .keyboardShortcut(FileMenuItem.close.shortcut)
+        .disabled(!FileMenuItem.close.isEnabled(hasKeyWindow: NSApp.keyWindow != nil || editor != nil, document: nil))
+      Divider()
+      fileItem(.save)
+      fileItem(.saveAs)
+      fileItem(.duplicate)
+      Divider()
+      fileItem(.revertToSaved)
+      fileItem(.rename)
+      fileItem(.moveTo)
     }
 
     CommandGroup(after: .saveItem) {
@@ -81,6 +97,12 @@ struct SkitchoCommands: Commands {
             set: { if $0 { editor?.selectTool(tool) } }))
       }
     }
+  }
+
+  private func fileItem(_ item: FileMenuItem) -> some View {
+    Button(item.title) { editor?.perform(item) }
+      .keyboardShortcut(item.shortcut)
+      .disabled(!(editor?.isEnabled(item) ?? false))
   }
 
   private func item(_ title: String, _ command: EditorCommandModel.Command) -> some View {
