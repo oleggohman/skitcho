@@ -45,6 +45,21 @@ Try the app by launching `build/Skitcho.app`, not the bare executable.
   See [SECURITY.md](SECURITY.md) and [docs/RELEASING.md](docs/RELEASING.md).
 - Do not add a dependency without discussing it first. Sparkle is the only third-party package.
 
+## Security automation
+
+- **CodeQL** scans the Swift sources and the workflow files on pushes to `main`, pull requests and weekly.
+- **Trivy** scans the repository for vulnerabilities, secrets and misconfigurations after merges to `main`
+  and weekly; HIGH and CRITICAL findings fail the run. It is installed as a pinned binary with a hardcoded
+  SHA-256 (update `TRIVY_VERSION` and `TRIVY_SHA256` together).
+- **Dependabot** opens weekly update pull requests for Swift packages and GitHub Actions.
+- **Dependency review** blocks pull requests that add dependencies with moderate or worse vulnerabilities.
+- **OpenSSF Scorecard** audits repository practices weekly and publishes the result (see the README badge).
+- **Secret scanning with push protection** blocks commits that contain known secret formats.
+- **Private vulnerability reporting** is enabled; report issues through the Security tab, not a public issue.
+
+Every action in a workflow must be GitHub-owned (or `ossf/scorecard-action`) and pinned to a full commit SHA
+with a `# vX.Y.Z` comment; `scripts/test-workflows.sh` enforces this.
+
 ## Notes for automated agents
 
 Sandboxed agents may need the sandbox disabled for SwiftPM builds and tests, for `scripts/bundle.sh` and
