@@ -136,7 +136,8 @@ Zooming by hand (⌘+, ⌘-, ⌘0 or pinch) leaves fit mode; ⌘9 Zoom to Fit re
 ## Saving
 
 - **⌘S saves a flattened JPEG** (quality 90%) by default.
-- **An opened JPG** is overwritten in place only when you press ⌘S. It is never autosaved.
+- **An opened JPG** is overwritten in place only when you press ⌘S. Skitcho writes a JPEG only on an explicit
+  ⌘S or Save As…; the document system itself can save only the editable Skitcho format.
 - **A new picture or another image type** (PNG, HEIC, …) asks where to save, with JPEG preselected and
   "Skitcho (editable)" as the alternative.
 - **Save As… (⇧⌘S)** always shows the panel with both formats. Saving a `.skitcho` document as JPEG writes a
@@ -146,6 +147,8 @@ Zooming by hand (⌘+, ⌘-, ⌘0 or pinch) leaves fit mode; ⌘9 Zoom to Fit re
 - **Saving a JPEG drops EXIF and GPS metadata** and stores the colors as sRGB.
 - ⚠️ If macOS does not provide the location of the opened file, ⌘S shows the save panel instead of
   overwriting.
+- ⚠️ After saving an opened JPG as another JPEG, ⌘S writes the new file, but the window title and Revert to
+  Saved still refer to the opened file.
 
 ## File format
 
