@@ -8,6 +8,8 @@ public enum PackageCodecError: Error, Equatable {
   case missingFile(String)
   case corruptImage
   case corruptJSON
+  /// The package was written by a newer version of the app.
+  case unsupportedVersion(Int)
   case encodingFailed
 }
 
@@ -20,13 +22,22 @@ public enum PackageCodec {
     var version: Int
     var canvasWidth: Double
     var canvasHeight: Double
+    var imageOriginX: Double
+    var imageOriginY: Double
+    var background: AnnotationColor
     var elements: [Element]
+  }
+
+  /// Read first so a package from a future version reports its version instead of a decoding error.
+  private struct Header: Codable {
+    var version: Int
   }
 
   public static func wrapper(for document: Document) throws -> FileWrapper {
     let payload = Payload(
-      version: 1, canvasWidth: document.canvasSize.width, canvasHeight: document.canvasSize.height,
-      elements: document.elements)
+      version: Document.currentVersion, canvasWidth: document.canvasSize.width,
+      canvasHeight: document.canvasSize.height, imageOriginX: document.imageOrigin.x,
+      imageOriginY: document.imageOrigin.y, background: document.background, elements: document.elements)
     let json = try JSONEncoder().encode(payload)
     let png = try pngData(document.baseImage)
     let dir = FileWrapper(directoryWithFileWrappers: [:])
@@ -43,13 +54,15 @@ public enum PackageCodec {
     guard let files = wrapper.fileWrappers else { throw PackageCodecError.missingFile(jsonName) }
     guard let jsonData = files[jsonName]?.regularFileContents else { throw PackageCodecError.missingFile(jsonName) }
     guard let pngData = files[imageName]?.regularFileContents else { throw PackageCodecError.missingFile(imageName) }
-    guard let payload = try? JSONDecoder().decode(Payload.self, from: jsonData) else {
-      throw PackageCodecError.corruptJSON
-    }
+    let decoder = JSONDecoder()
+    guard let header = try? decoder.decode(Header.self, from: jsonData) else { throw PackageCodecError.corruptJSON }
+    guard header.version <= Document.currentVersion else { throw PackageCodecError.unsupportedVersion(header.version) }
+    guard let payload = try? decoder.decode(Payload.self, from: jsonData) else { throw PackageCodecError.corruptJSON }
     let image = try decodeImage(pngData)
     return Document(
       baseImage: image, canvasSize: CGSize(width: payload.canvasWidth, height: payload.canvasHeight),
-      elements: payload.elements)
+      imageOrigin: CGPoint(x: payload.imageOriginX, y: payload.imageOriginY), background: payload.background,
+      elements: payload.elements, version: payload.version)
   }
 
   /// Builds a document from raw image bytes (PNG, JPEG, ...).

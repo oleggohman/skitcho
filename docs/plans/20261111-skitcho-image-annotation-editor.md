@@ -270,11 +270,11 @@
 - Create: `Sources/SkitchoCore/Model/Element.swift`, `StampKind.swift`
 - Create: `Tests/SkitchoCoreTests/ModelTests.swift`
 
-- [ ] `Element`/`ElementKind`/`TextContent`/`StampKind` per Technical Details (Sendable, Equatable, no CGPath); per-element `bounds`, `hitTest(point:tolerance:)`, `translated(by:)`, `scaled(by:about:)`
-- [ ] versioned Codable JSON; `PackageCodec` typed errors
-- [ ] write tests: JSON round-trip for every kind, package round-trip in a temp dir, bounds with rotation
-- [ ] write tests for errors: missing base.png, future version, corrupt JSON
-- [ ] run tests. Must pass before task 7.
+- [x] `Element`/`ElementKind`/`TextContent`/`StampKind` per Technical Details (Sendable, Equatable, no CGPath); per-element `bounds`, `hitTest(point:tolerance:)`, `translated(by:)`, `scaled(by:about:)`
+- [x] versioned Codable JSON; `PackageCodec` typed errors
+- [x] write tests: JSON round-trip for every kind, package round-trip in a temp dir, bounds with rotation
+- [x] write tests for errors: missing base.png, future version, corrupt JSON
+- [x] run tests. Must pass before task 7.
 
 ### Task 7: Renderer — base, shapes, arrows, freehand, flatten
 

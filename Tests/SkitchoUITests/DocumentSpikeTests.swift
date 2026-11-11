@@ -20,7 +20,10 @@ import UniformTypeIdentifiers
 
   @MainActor @Test func packageRoundTripThroughSnapshot() throws {
     let doc = SkitchoDocument()
-    doc.editor.document.elements = [Element()]
+    let style = Style.make(tool: .line, imageSize: CGSize(width: 800, height: 600))
+    doc.editor.document.elements = [
+      Element(kind: .line(start: CGPoint(x: 1, y: 2), end: CGPoint(x: 30, y: 40)), style: style)
+    ]
     let snap = try doc.snapshot(contentType: .skitchoDocument)
     let wrapper = try PackageCodec.wrapper(for: snap)
     #expect(wrapper.isDirectory)

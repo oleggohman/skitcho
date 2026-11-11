@@ -32,6 +32,18 @@ public enum ShapePaths {
     return path
   }
 
+  /// The smooth stroke through `segments`; a gap between segments starts a new subpath.
+  public static func freehand(_ segments: [BezierSegment]) -> CGPath {
+    let path = CGMutablePath()
+    var current: CGPoint?
+    for segment in segments {
+      if current != segment.p0 { path.move(to: segment.p0) }
+      path.addCurve(to: segment.p3, control1: segment.p1, control2: segment.p2)
+      current = segment.p3
+    }
+    return path
+  }
+
   private static func rotated(_ path: CGPath, about pivot: CGPoint, by angle: Double) -> CGPath {
     guard angle != 0 else { return path }
     var transform = CGAffineTransform(translationX: pivot.x, y: pivot.y)
