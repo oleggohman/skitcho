@@ -22,7 +22,7 @@ private final class RecordingDocument: NSDocument {
   override func saveAs(_ sender: Any?) { saveAsCalls += 1 }
   override func save(
     to url: URL, ofType typeName: String, for saveOperation: NSDocument.SaveOperationType,
-    completionHandler: @escaping @MainActor @Sendable (Error?) -> Void
+    completionHandler: @escaping (Error?) -> Void
   ) {
     savedTo.append((url, typeName, saveOperation))
     completionHandler(saveError)
