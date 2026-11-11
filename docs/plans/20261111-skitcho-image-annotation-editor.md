@@ -121,6 +121,7 @@
 }
 ```
 - `DocumentGroup(newDocument: { SkitchoDocument() })` calls the `nonisolated init()`, so there is no isolation warning. `MainActor.assumeIsolated` is forbidden in document code because SwiftUI/NSDocument may read files off the main thread. If the exact form differs on the SDK, Task 2 records the working form here before later tasks start.
+- Verified in Task 2: the pattern compiles warning-free as written. Two additions: (1) Core `Document` collides with `SwiftUI.Document`, so any SkitchoUI file importing both SwiftUI and SkitchoCore adds `import struct SkitchoCore.Document` (the `SkitchoCore.Document` qualifier does not work because the `SkitchoCore` marker enum shadows the module name); (2) `DocumentGroup(newDocument:editor:)` is written with both labels (swift-format rejects the trailing-closure form); `SkitchoDocument` exposes a `nonisolated init(initial:)` for tests; tests touching static content types must be `@MainActor`.
 - Undo: `EditorModel(document:undoManager:)` takes an `UndoManager?`. `EditorWindowView` re-binds it from `@Environment(\.undoManager)`. `ReferenceFileDocument` dirty state then follows registrations on the window's manager.
   - `perform(_ name: String, _ change: (inout Document) -> Void)` snapshots `old`, applies the change, then registers `{ $0.restore(old, name) }`. `restore` re-registers the current state, so redo works.
   - No-op changes (equal document) register nothing.
@@ -219,11 +220,11 @@
 - Modify: `Sources/Skitcho/SkitchoApp.swift`, `Resources/Info.plist.template`
 - Create: `Tests/SkitchoUITests/DocumentSpikeTests.swift`
 
-- [ ] implement the exact pattern from Technical Details › Concurrency, with `DocumentGroup` showing a placeholder view of the image
-- [ ] the project sources build **warning-free**: `swift build --arch arm64 2>&1 | grep -E '^/.*/Sources/.*\.swift:[0-9]+:[0-9]+: warning:' | wc -l` = 0 (ignore SwiftPM environment/artifact notices). If the pattern needs changes, update Technical Details in this plan.
-- [ ] write tests: FileWrapper round-trip through `SkitchoDocument.fileWrapper`/`init(configuration:)` equivalents (call PackageCodec + snapshot directly); `writableContentTypes == [.skitchoDocument]`; reading PNG data yields a document. No UTI registry lookups in tests.
-- [ ] write test: the document decoding path runs from `Task.detached` (off the main actor) without trapping; afterwards, `editor` accessed on the main actor holds the decoded document
-- [ ] run tests + test-bundle. Must pass before task 3.
+- [x] implement the exact pattern from Technical Details › Concurrency, with `DocumentGroup` showing a placeholder view of the image
+- [x] the project sources build **warning-free**: `swift build --arch arm64 2>&1 | grep -E '^/.*/Sources/.*\.swift:[0-9]+:[0-9]+: warning:' | wc -l` = 0 (ignore SwiftPM environment/artifact notices). If the pattern needs changes, update Technical Details in this plan.
+- [x] write tests: FileWrapper round-trip through `SkitchoDocument.fileWrapper`/`init(configuration:)` equivalents (call PackageCodec + snapshot directly); `writableContentTypes == [.skitchoDocument]`; reading PNG data yields a document. No UTI registry lookups in tests.
+- [x] write test: the document decoding path runs from `Task.detached` (off the main actor) without trapping; afterwards, `editor` accessed on the main actor holds the decoded document
+- [x] run tests + test-bundle. Must pass before task 3.
 
 ### Task 3: Annotation style tokens — colors and sizes
 
