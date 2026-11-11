@@ -21,7 +21,7 @@ struct SkitchoCommands: Commands {
     }
 
     CommandGroup(after: .saveItem) {
-      // Export As… arrives with the export UI.
+      item("Export As…", .exportAs).keyboardShortcut("e", modifiers: [.command, .shift])
       item("Copy Image", .copyImage).keyboardShortcut("c", modifiers: [.command, .shift])
     }
 

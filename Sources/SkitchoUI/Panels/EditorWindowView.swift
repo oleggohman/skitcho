@@ -54,12 +54,18 @@ public struct EditorWindowView: View {
   @State private var palette: ToolPaletteModel
   @State private var properties: PropertiesModel
   @State private var commands: EditorCommandModel
+  @State private var dragOut: DragOutSource
 
   public init(document: SkitchoDocument) {
     self.editor = document.editor
     let handle = CanvasHandle()
     _handle = State(initialValue: handle)
     _commands = State(initialValue: EditorCommandModel(editor: document.editor, handle: handle))
+    let editor = document.editor
+    _dragOut = State(
+      initialValue: DragOutSource(
+        document: { editor.document },
+        documentName: { [weak handle] in handle?.canvas?.window?.title }))
     _palette = State(initialValue: ToolPaletteModel(editor: document.editor))
     _properties = State(
       initialValue: PropertiesModel(
@@ -108,6 +114,7 @@ public struct EditorWindowView: View {
     .onAppear {
       Self.bind(editor, to: undoManager)
       commands.beginResize = { startResize() }
+      commands.presentExport = { presentExport() }
     }
     .onChange(of: undoManager) { _, new in Self.bind(editor, to: new) }
   }
@@ -124,6 +131,8 @@ public struct EditorWindowView: View {
         Button("Resize…") { startResize() }
           .buttonStyle(CZButtonStyle(.secondary, size: .small))
           .help("Resize, rotate or flip the image")
+        DragOutHandle(source: dragOut)
+          .frame(width: 28, height: 22)
         zoomControls
       }
     }
@@ -160,6 +169,16 @@ public struct EditorWindowView: View {
       .accessibilityLabel("Fit to window")
     }
     .buttonStyle(CZButtonStyle(.transparent, size: .small))
+  }
+
+  private func presentExport() {
+    let editor = editor
+    let window = handle.canvas?.window
+    ExportPresenter.present(
+      document: { editor.document },
+      suggestedName: DragOutSource.fileName(forDocumentName: window?.title),
+      window: window,
+      onError: { commands.errorMessage = $0 })
   }
 
   private func startResize() {

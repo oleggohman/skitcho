@@ -127,7 +127,7 @@ import struct SkitchoCore.Document
       .cut: false, .copy: false, .paste: true, .delete: false, .selectAll: true,
       .bringForward: false, .sendBackward: false,
       .cropTool: true, .resize: true, .rotateLeft: true, .rotateRight: true,
-      .flipHorizontal: true, .flipVertical: true, .expandCanvas: true, .copyImage: true,
+      .flipHorizontal: true, .flipVertical: true, .expandCanvas: true, .copyImage: true, .exportAs: true,
       .zoomIn: true, .zoomOut: true, .actualSize: true, .zoomToFit: true,
     ]
     for command in EditorCommandModel.Command.allCases {
@@ -168,7 +168,9 @@ import struct SkitchoCore.Document
     canvas.handleKey(.character("a"), modifiers: [])  // type-to-create starts editing
     #expect(canvas.isEditingText)
     #expect(model.isEnabled(.copy) && model.isEnabled(.cut) && model.isEnabled(.selectAll))
-    for command in [EditorCommandModel.Command.delete, .bringForward, .sendBackward, .resize, .rotateLeft, .copyImage] {
+    for command in [
+      EditorCommandModel.Command.delete, .bringForward, .sendBackward, .resize, .rotateLeft, .copyImage, .exportAs,
+    ] {
       #expect(!model.isEnabled(command), "\(command) while editing")
     }
   }

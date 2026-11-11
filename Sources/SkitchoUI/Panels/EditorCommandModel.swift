@@ -10,7 +10,7 @@ public final class EditorCommandModel {
     case cut, copy, paste, delete, selectAll
     case bringForward, sendBackward
     case cropTool, resize, rotateLeft, rotateRight, flipHorizontal, flipVertical, expandCanvas
-    case copyImage
+    case copyImage, exportAs
     case zoomIn, zoomOut, actualSize, zoomToFit
   }
 
@@ -24,6 +24,8 @@ public final class EditorCommandModel {
   public var beginResize: () -> Void = {}
   /// Failure of the last image operation, shown by the window as an alert.
   public var errorMessage: String?
+  /// Presents Export As… (replaced in tests).
+  public var presentExport: () -> Void = {}
 
   public init(editor: EditorModel, handle: CanvasHandle, bridge: PasteboardBridge = PasteboardBridge()) {
     self.editor = editor
@@ -52,7 +54,8 @@ public final class EditorCommandModel {
     case .paste: return true
     case .bringForward, .sendBackward:
       return !editing && !editor.selection.isEmpty && editor.document.elements.count > 1
-    case .cropTool, .resize, .rotateLeft, .rotateRight, .flipHorizontal, .flipVertical, .expandCanvas, .copyImage:
+    case .cropTool, .resize, .rotateLeft, .rotateRight, .flipHorizontal, .flipVertical, .expandCanvas, .copyImage,
+      .exportAs:
       return !editing && !editor.isInteracting
     case .zoomIn, .zoomOut, .actualSize, .zoomToFit: return handle.canvas != nil
     }
@@ -90,6 +93,7 @@ public final class EditorCommandModel {
     case .expandCanvas: expandCanvas(.right)
     case .copyImage:
       return attempt { try bridge.writeImage(try DocumentRenderer.flatten(editor.document, scale: 1)) }
+    case .exportAs: presentExport()
     case .zoomIn: handle.zoomIn()
     case .zoomOut: handle.zoomOut()
     case .actualSize: handle.actualSize()

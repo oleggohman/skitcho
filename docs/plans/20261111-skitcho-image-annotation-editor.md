@@ -520,10 +520,10 @@
 - Create: `Sources/SkitchoUI/Panels/ExportAccessoryView.swift`, `Sources/SkitchoUI/Canvas/DragOutSource.swift`
 - Create: `Tests/SkitchoUITests/ExportUITests.swift`
 
-- [ ] Export As… `NSSavePanel` + accessory (`CZCard`: format, JPEG quality, Retina 2×) that remembers the last choice in UserDefaults
-- [ ] drag-out handle in the bottom bar: `NSFilePromiseProvider` writes a flattened PNG named after the document
-- [ ] write tests: accessory state → `ExportFormat`, the promise writer produces a decodable PNG in a temp dir
-- [ ] run tests. Must pass before task 28.
+- [x] Export As… `NSSavePanel` + accessory (`CZCard`: format, JPEG quality, Retina 2×) that remembers the last choice in UserDefaults
+- [x] drag-out handle in the bottom bar: `NSFilePromiseProvider` writes a flattened PNG named after the document
+- [x] write tests: accessory state → `ExportFormat`, the promise writer produces a decodable PNG in a temp dir
+- [x] run tests. Must pass before task 28.
 
 ### Task 28: Auto-update with Sparkle 2
 
