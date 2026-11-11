@@ -80,8 +80,9 @@ count, so use a full clone and build exactly the commit that gets tagged.
    ```
 
    Do not use `-x /dev/stdout`: `generate_keys` writes an error string there instead of the key. Never
-   export into the working tree. Add `FIRST_RELEASE=1` to the `scripts/release.sh` call for `v0.1.0` only
-   (see [The first release](#the-first-release)).
+   export into the working tree. Add `FIRST_RELEASE=1` to the `scripts/release.sh` call for `v0.1.1` only
+   (see [The first release](#the-first-release)). Bug-fix releases bump the patch version by 0.0.1
+   (0.1.1, then 0.1.2).
 
    `scripts/release.sh` then:
    - Preflight, before anything is built or sent to Apple: the Sparkle key pair matches, the
@@ -134,8 +135,18 @@ GitHub answers 404 for `releases/latest/download/appcast.xml` both when no relea
 latest release has no `appcast.xml` asset (a manual release, a deleted asset). Treating the second case as
 "no feed" would drop every older item and skip the version guards, so `scripts/release.sh` only accepts a
 404 with an explicit `FIRST_RELEASE=1`, and refuses `FIRST_RELEASE=1` when a feed is published. Set it for
-`v0.1.0` only and never again. If a later release fails with "returned 404", restore `appcast.xml` on the
-latest release instead.
+`v0.1.1`, the first public release, only and never again. If a later release fails with "returned 404",
+restore `appcast.xml` on the latest release instead.
+
+For the first release, steps 3 to 5 read:
+
+```bash
+FIRST_RELEASE=1 scripts/release.sh 0.1.1   # inside the subshell of step 3; writes dist/Skitcho-0.1.1.dmg
+git tag v0.1.1
+git push origin v0.1.1
+gh release create v0.1.1 dist/Skitcho-0.1.1.dmg dist/appcast.xml \
+  --repo oleggohman/skitcho --verify-tag --latest --title "Skitcho 0.1.1" --generate-notes
+```
 
 ## Verifying a release
 
