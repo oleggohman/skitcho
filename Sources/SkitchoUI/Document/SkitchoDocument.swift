@@ -26,12 +26,13 @@ public final class SkitchoDocument: @preconcurrency ReferenceFileDocument {
     }
   }
 
+  /// A new document: the pending clipboard document (see `PendingDocument`), else a blank canvas.
   public nonisolated init() {
-    self.initial = Document.blank()
+    self.initial = PendingDocument.take() ?? Document.blank()
   }
 
-  /// Wraps an already decoded document (used by tests and future import paths).
-  nonisolated init(initial: Document) {
+  /// Wraps an already decoded document (New from Clipboard, tests).
+  public nonisolated init(initial: Document) {
     self.initial = initial
   }
 
@@ -43,5 +44,29 @@ public final class SkitchoDocument: @preconcurrency ReferenceFileDocument {
     snapshot: Document, configuration: WriteConfiguration
   ) throws -> FileWrapper {
     try PackageCodec.wrapper(for: snapshot)
+  }
+}
+
+/// Hands a decoded document to the next `SkitchoDocument()`. `NewDocumentAction` can only create blank
+/// documents for a `ReferenceFileDocument`, so New from Clipboard stores the clipboard image here and then
+/// asks for a new document; the new document's initializer takes it.
+public enum PendingDocument {
+  private nonisolated(unsafe) static var value: Document?
+  private static let lock = NSLock()
+
+  public static func set(_ document: Document) {
+    lock.withLock { value = document }
+  }
+
+  static func take() -> Document? {
+    lock.withLock {
+      defer { value = nil }
+      return value
+    }
+  }
+
+  /// Drops a document that was set but never claimed.
+  public static func clear() {
+    lock.withLock { value = nil }
   }
 }

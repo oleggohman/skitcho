@@ -45,6 +45,9 @@ public enum PaletteItem: String, CaseIterable, Sendable, Identifiable {
 }
 
 extension Tool {
+  /// Name with the single-key shortcut, e.g. "Arrow (A)", for menus and tooltips.
+  public var titleWithShortcut: String { "\(title) (\(String(shortcut).uppercased()))" }
+
   /// Human-readable name for labels and tooltips.
   public var title: String {
     switch self {
@@ -127,7 +130,8 @@ public final class ToolPaletteModel {
 
   /// The tool a tap on `item` selects.
   public func tool(for item: PaletteItem) -> Tool {
-    item == .shapes ? lastShape : item.tools[0]
+    if item == .shapes { return Self.shapeTools.contains(editor.currentTool) ? editor.currentTool : lastShape }
+    return item.tools[0]
   }
 
   /// Icon of `item`; the Shapes button shows the last chosen shape.
@@ -211,7 +215,7 @@ public struct ToolPalette: View {
     HStack(spacing: Spacing.xxs) {
       if item == .shapes {
         ForEach(ToolPaletteModel.shapeTools, id: \.self) { tool in
-          choice(symbol: tool.symbolName, title: tool.title, selected: model.lastShape == tool) {
+          choice(symbol: tool.symbolName, title: tool.titleWithShortcut, selected: model.tool(for: .shapes) == tool) {
             model.select(tool)
             popover = nil
           }

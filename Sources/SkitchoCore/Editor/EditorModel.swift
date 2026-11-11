@@ -204,6 +204,19 @@ public final class EditorModel {
     updateSelection("Change Color") { $0.style.color = color }
   }
 
+  /// Applies `color` as a live preview inside a `beginInteractive` / `commitInteractive` gesture: the document
+  /// changes without registering undo, so a continuous change (color picker drag) becomes one undo step.
+  public func applyColorLive(_ color: AnnotationColor) {
+    guard !selection.isEmpty else {
+      nextColor = color
+      return
+    }
+    let ids = selection
+    for index in document.elements.indices where ids.contains(document.elements[index].id) {
+      document.elements[index].style.color = color
+    }
+  }
+
   /// Applies `step` to the selection (recomputing frozen sizes from the current canvas), else to the next element.
   public func applySizeStep(_ step: SizeStep) {
     guard !selection.isEmpty else {

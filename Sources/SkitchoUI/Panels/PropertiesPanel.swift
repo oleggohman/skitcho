@@ -72,21 +72,66 @@ public final class PropertiesModel {
 
   // MARK: Commands
 
-  public func setColor(_ color: AnnotationColor) { editor.applyColor(color) }
-
-  /// Applies a color chosen in the system color picker as a custom annotation color.
-  public func setCustomColor(_ color: Color) {
-    guard let srgb = NSColor(color).usingColorSpace(.sRGB) else { return }
-    editor.applyColor(
-      .custom(
-        RGBA(
-          red: Double(srgb.redComponent), green: Double(srgb.greenComponent), blue: Double(srgb.blueComponent),
-          alpha: Double(srgb.alphaComponent))))
+  public func setColor(_ color: AnnotationColor) {
+    finishCustomColor()
+    editor.applyColor(color)
   }
 
-  public func setSize(_ step: SizeStep) { editor.applySizeStep(step) }
-  public func toggleTextStyle() { editor.toggleTextStyle() }
-  public func toggleDoubleHead() { editor.toggleDoubleHead() }
+  /// How long a custom color stays quiet before its continuous change is committed as one undo step.
+  public var colorCommitDelay: Duration = .milliseconds(400)
+  /// True while a continuous custom color change is open (one undo step is pending).
+  public private(set) var isColorSessionActive = false
+  private var colorCommit: Task<Void, Never>?
+
+  /// Applies a color chosen in the system color picker as a custom annotation color. Changes that follow each
+  /// other (dragging in the picker) are previewed live and coalesced into one "Change Color" undo step, which
+  /// is committed after `colorCommitDelay` of quiet or by `finishCustomColor()`.
+  public func setCustomColor(_ color: Color) {
+    guard let srgb = NSColor(color).usingColorSpace(.sRGB) else { return }
+    let custom = AnnotationColor.custom(
+      RGBA(
+        red: Double(srgb.redComponent), green: Double(srgb.greenComponent), blue: Double(srgb.blueComponent),
+        alpha: Double(srgb.alphaComponent)))
+    if !isColorSessionActive {
+      // Another gesture owns the interactive slot: fall back to a plain one-step change.
+      guard !editor.isInteracting else {
+        editor.applyColor(custom)
+        return
+      }
+      editor.beginInteractive()
+      isColorSessionActive = true
+    }
+    editor.applyColorLive(custom)
+    colorCommit?.cancel()
+    let delay = colorCommitDelay
+    colorCommit = Task { [weak self] in
+      try? await Task.sleep(for: delay)
+      guard !Task.isCancelled else { return }
+      self?.finishCustomColor()
+    }
+  }
+
+  /// Ends the open custom color change (if any) and registers its single undo step.
+  public func finishCustomColor() {
+    colorCommit?.cancel()
+    colorCommit = nil
+    guard isColorSessionActive else { return }
+    isColorSessionActive = false
+    editor.commitInteractive(name: "Change Color")
+  }
+
+  public func setSize(_ step: SizeStep) {
+    finishCustomColor()
+    editor.applySizeStep(step)
+  }
+  public func toggleTextStyle() {
+    finishCustomColor()
+    editor.toggleTextStyle()
+  }
+  public func toggleDoubleHead() {
+    finishCustomColor()
+    editor.toggleDoubleHead()
+  }
 
   /// Starts a label on the selected stamp. Returns false when the panel does not offer it.
   @discardableResult

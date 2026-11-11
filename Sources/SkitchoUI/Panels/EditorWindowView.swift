@@ -53,11 +53,13 @@ public struct EditorWindowView: View {
   @State private var resize: ResizeModel?
   @State private var palette: ToolPaletteModel
   @State private var properties: PropertiesModel
+  @State private var commands: EditorCommandModel
 
   public init(document: SkitchoDocument) {
     self.editor = document.editor
     let handle = CanvasHandle()
     _handle = State(initialValue: handle)
+    _commands = State(initialValue: EditorCommandModel(editor: document.editor, handle: handle))
     _palette = State(initialValue: ToolPaletteModel(editor: document.editor))
     _properties = State(
       initialValue: PropertiesModel(
@@ -93,7 +95,20 @@ public struct EditorWindowView: View {
       .padding(Spacing.xs)
     }
     .background(BrandSemantic.windowBackground.color)
-    .onAppear { Self.bind(editor, to: undoManager) }
+    .focusedSceneValue(\.editorCommands, commands)
+    .alert(
+      "Skitcho",
+      isPresented: Binding(
+        get: { commands.errorMessage != nil }, set: { if !$0 { commands.errorMessage = nil } })
+    ) {
+      Button("OK", role: .cancel) {}
+    } message: {
+      Text(commands.errorMessage ?? "")
+    }
+    .onAppear {
+      Self.bind(editor, to: undoManager)
+      commands.beginResize = { startResize() }
+    }
     .onChange(of: undoManager) { _, new in Self.bind(editor, to: new) }
   }
 

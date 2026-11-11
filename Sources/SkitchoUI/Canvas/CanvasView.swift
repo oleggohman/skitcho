@@ -436,8 +436,24 @@ public final class CanvasView: NSView {
       window?.invalidateCursorRects(for: self)
       return
     }
-    if let key = Self.toolKey(for: event), activeController.keyDown(key, modifiers: modifiers) { return }
+    if let key = Self.toolKey(for: event), handleKey(key, modifiers: modifiers) { return }
     super.keyDown(with: event)
+  }
+
+  /// True while a text element is being edited (keys then belong to the text editor).
+  public var isEditingText: Bool { textController?.isEditing ?? false }
+
+  /// Routes a key press: a tool shortcut switches the tool when `ToolShortcutRouter` allows it, otherwise the
+  /// active controller gets the key (type-to-create, delete, arrows, Escape). Returns true when consumed.
+  @discardableResult
+  public func handleKey(_ key: ToolKey, modifiers: ToolModifiers) -> Bool {
+    if let tool = ToolShortcutRouter.tool(
+      for: key, modifiers: modifiers, currentTool: editor.currentTool, isEditingText: isEditingText)
+    {
+      editor.currentTool = tool
+      return true
+    }
+    return activeController.keyDown(key, modifiers: modifiers)
   }
 
   public override func keyUp(with event: NSEvent) {

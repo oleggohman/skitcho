@@ -499,7 +499,7 @@
 - Create: `Sources/SkitchoUI/Panels/AboutView.swift`
 - Create: `Tests/SkitchoUITests/CommandsTests.swift`
 
-- [ ] menus:
+- [x] menus:
   - File: New Blank, New from Clipboard ⌥⌘N via `@Environment(\.newDocument)`, Open, Save, Export As…, Copy Image
   - Edit: Undo/Redo, Copy/Paste/Delete, Select All
   - Arrange: Bring Forward ⌘], Send Backward ⌘[
@@ -507,10 +507,12 @@
   - View: zoom
   - Tools: shortcuts
   - commands are enabled based on editor state
-- [ ] `PasteboardBridge`: element copy/paste (custom type ↔ `ElementClipboard` Data), image copy (PNG+TIFF), reading an image for New from Clipboard; Dock-icon drop opens images via the document controller
-- [ ] About: "Skitcho — by CloudZone", version, MIT license
-- [ ] write tests: the pasteboard bridge round-trips elements and images on a private `NSPasteboard(name:)`, the command enablement table
-- [ ] run tests. Must pass before task 27.
+- [x] `PasteboardBridge`: element copy/paste (custom type ↔ `ElementClipboard` Data), image copy (PNG+TIFF), reading an image for New from Clipboard; Dock-icon drop opens images via the document controller
+- [x] About: "Skitcho — by CloudZone", version, MIT license
+- [x] write tests: the pasteboard bridge round-trips elements and images on a private `NSPasteboard(name:)`, the command enablement table
+- [x] run tests. Must pass before task 27.
+- [x] ➕ tool shortcuts vs type-to-create: `ToolShortcutRouter` + `CanvasView.handleKey` (editing text -> editor; Text tool idle -> typing creates text; other tool -> letter switches tool); shortcuts shown in the Tools menu titles and palette tooltips (tested)
+- [x] ➕ custom ColorPicker coalesces a continuous change into one undo step (`EditorModel.applyColorLive` + `PropertiesModel` begin/commit with debounce and flush; tested)
 
 ### Task 27: Export UI, Copy Image, drag-out
 
