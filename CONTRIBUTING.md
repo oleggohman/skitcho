@@ -27,8 +27,8 @@ swift format lint --strict --recursive Sources Tests
 | --- | --- |
 | `scripts/bundle.sh` | Assemble `build/Skitcho.app` (arm64 only, ad-hoc signed by default) |
 | `scripts/test-bundle.sh` | Build the bundle and assert thin arm64 Mach-Os, plist keys, codesign, no font files, no stray hex colors |
-| `scripts/test-bundle.sh --release-dry-run` | Exercise `scripts/release.sh --dry-run` with a throwaway key (no secrets, no notarization) |
-| `scripts/test-workflows.sh` | Check the GitHub workflow YAML (parses, no secret echo, pinned actions) |
+| `scripts/test-bundle.sh --release-dry-run` | Exercise `scripts/release.sh --dry-run` with a throwaway key and a fixture feed: preflight rejections, the DMG contents (mounted read-only) and the appcast signature (no secrets, no notarization) |
+| `scripts/test-workflows.sh` | Check the GitHub workflows and `scripts/*.sh` (YAML parses, no xtrace, no printed secrets, no zip packaging, pinned actions) |
 
 Run `scripts/test-bundle.sh` before sending a change that touches packaging, resources or `Package.swift`.
 Try the app by launching `build/Skitcho.app`, not the bare executable.

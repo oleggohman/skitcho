@@ -7,3 +7,4 @@ dist/
 *.p8
 *.key
 .env*
+sparkle_private_key*
