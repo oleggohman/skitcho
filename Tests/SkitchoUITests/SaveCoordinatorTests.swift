@@ -228,6 +228,44 @@ private final class RecordingDocument: NSDocument {
     #expect(!nsDocument.isDocumentEdited)
   }
 
+  @Test func aJPEGSaveAsOverTheOpenedFileThroughASymlinkUpdatesTheModificationDate() throws {
+    let opened = try writeFile("a.jpg", blackJPEG())
+    let nsDocument = document(type: .jpeg, url: opened)
+    nsDocument.fileModificationDate = Date(timeIntervalSince1970: 1_000_000)
+    let link = directory.appendingPathComponent("link")
+    try FileManager.default.createSymbolicLink(at: link, withDestinationURL: directory)
+    let log = PanelLog()
+    log.choice = SavePanelChoice(url: link.appendingPathComponent("a.jpg"), format: .jpeg)
+    let coordinator = makeCoordinator(makeEditor(), nsDocument: nsDocument, log: log)
+
+    coordinator.saveAs()
+
+    var fresh = opened
+    fresh.removeAllCachedResourceValues()
+    let date = try fresh.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate
+    #expect(date != nil)
+    #expect(nsDocument.fileModificationDate == date)
+    #expect(!nsDocument.isDocumentEdited)
+  }
+
+  @Test func isSameFileSeesThroughSpellingsOfOnePath() throws {
+    let file = try writeFile("same.jpg", blackJPEG())
+    let other = try writeFile("other.jpg", blackJPEG())
+    let fileLink = directory.appendingPathComponent("same-link.jpg")
+    try FileManager.default.createSymbolicLink(at: fileLink, withDestinationURL: file)
+    let directoryLink = directory.appendingPathComponent("dir-link")
+    try FileManager.default.createSymbolicLink(at: directoryLink, withDestinationURL: directory)
+
+    #expect(SaveCoordinator.isSameFile(file, fileLink))
+    #expect(SaveCoordinator.isSameFile(file, directoryLink.appendingPathComponent("same.jpg")))
+    #expect(SaveCoordinator.isSameFile(file, directory.appendingPathComponent("./x/../same.jpg")))
+    #expect(!SaveCoordinator.isSameFile(file, other))
+    // A missing file has no identifier: the resolved paths decide.
+    let missing = directory.appendingPathComponent("missing.jpg")
+    #expect(SaveCoordinator.isSameFile(missing, directoryLink.appendingPathComponent("missing.jpg")))
+    #expect(!SaveCoordinator.isSameFile(missing, other))
+  }
+
   @Test func aJPEGSaveAsToAnotherFileLeavesTheDocumentModificationDate() throws {
     let opened = try writeFile("a.jpg", blackJPEG())
     let nsDocument = document(type: .jpeg, url: opened)

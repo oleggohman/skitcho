@@ -183,12 +183,33 @@ public final class SaveCoordinator {
     guard markSaved else { return }
     // NSDocument compares this date with its own file, so it is updated only when that file was written. After a
     // JPEG Save As the document keeps its original `fileURL` (a JPEG never becomes the document's saved type).
-    if let fileURL = nsDocument.fileURL, fileURL.standardizedFileURL == target.standardizedFileURL,
+    if let fileURL = nsDocument.fileURL, Self.isSameFile(fileURL, target),
       let date = try? target.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate
     {
       nsDocument.fileModificationDate = date
     }
     nsDocument.updateChangeCount(.changeCleared)
+  }
+
+  /// Whether two URLs name the same file, however they are spelled (symlinks, firmlinks, case, file-reference
+  /// URLs). Falls back to comparing the resolved paths when a file's identifier is unavailable (e.g. it is missing).
+  static func isSameFile(_ first: URL, _ second: URL) -> Bool {
+    // A fresh path URL: no cached resource values, and file-reference URLs become paths.
+    func pathURL(_ url: URL) -> URL { URL(fileURLWithPath: url.path).standardizedFileURL }
+    // Resource values describe a final symlink itself, so it is resolved first.
+    func identifier(_ url: URL) -> (any NSObjectProtocol & NSCopying)? {
+      try? pathURL(url).resolvingSymlinksInPath().resourceValues(forKeys: [.fileResourceIdentifierKey])
+        .fileResourceIdentifier
+    }
+    // A missing file's path is not resolved, so its (existing) folder is.
+    func resolvedPath(_ url: URL) -> URL {
+      let url = pathURL(url)
+      return url.deletingLastPathComponent().resolvingSymlinksInPath().appendingPathComponent(url.lastPathComponent)
+    }
+    if let firstID = identifier(first), let secondID = identifier(second) {
+      return firstID.isEqual(secondID)
+    }
+    return resolvedPath(first) == resolvedPath(second)
   }
 
   /// The default writer: a temp file next to the target, swapped in under file coordination that excludes the
