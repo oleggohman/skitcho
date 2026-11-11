@@ -327,10 +327,10 @@
 - Create: `Sources/SkitchoCore/Editor/Tool.swift`
 - Create: `Tests/SkitchoCoreTests/EditorUndoTests.swift`
 
-- [ ] `Tool` enum (shortcuts, default style); `EditorModel(document:undoManager:)`, `perform`, `restore` with redo re-registration, no-op detection, `begin/commit/cancelInteractive`
-- [ ] selection: select/toggle/selectAll/deselect/topMostHit; add/remove/move/nudge/reorder (forward/backward)
-- [ ] write tests (own `UndoManager()`): undo then redo restores each state, `undoActionName`, an interactive gesture is one undo step, cancel reverts, empty delete adds no entry, nudge 1/10, reorder
-- [ ] run tests. Must pass before task 12.
+- [x] `Tool` enum (shortcuts, default style); `EditorModel(document:undoManager:)`, `perform`, `restore` with redo re-registration, no-op detection, `begin/commit/cancelInteractive`
+- [x] selection: select/toggle/selectAll/deselect/topMostHit; add/remove/move/nudge/reorder (forward/backward)
+- [x] write tests (own `UndoManager()`): undo then redo restores each state, `undoActionName`, an interactive gesture is one undo step, cancel reverts, empty delete adds no entry, nudge 1/10, reorder
+- [x] run tests. Must pass before task 12.
 
 ### Task 12: Editor — style targeting, element clipboard data, image-op commands
 
