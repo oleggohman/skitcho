@@ -315,10 +315,10 @@
 - Create: `Sources/SkitchoCore/Ops/ImageOps.swift`
 - Create: `Tests/SkitchoCoreTests/ImageOpsTests.swift`
 
-- [ ] `pixelate`, `crop`, `resize`, `expandCanvas`, `rotate90`, `flip` with consistent element geometry/rotation updates; size guard; invalid rect
-- [ ] write tests: exact 2-px block averages on 4×4, crop translates arrow, **crop leaves strokeWidth unchanged**, **resize 0.5 halves strokeWidth and geometry**, rotate ×4 and flip ×2 are identity
-- [ ] write tests for errors: too large, invalid rect
-- [ ] run tests. Must pass before task 11.
+- [x] `pixelate`, `crop`, `resize`, `expandCanvas`, `rotate90`, `flip` with consistent element geometry/rotation updates; size guard; invalid rect
+- [x] write tests: exact 2-px block averages on 4×4, crop translates arrow, **crop leaves strokeWidth unchanged**, **resize 0.5 halves strokeWidth and geometry**, rotate ×4 and flip ×2 are identity
+- [x] write tests for errors: too large, invalid rect
+- [x] run tests. Must pass before task 11.
 
 ### Task 11: Editor core — perform, undo/redo, selection, interactive gestures
 
