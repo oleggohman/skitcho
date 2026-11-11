@@ -59,17 +59,24 @@ done
 # 2. XPC services are only needed by sandboxed apps; Skitcho is not sandboxed.
 rm -rf "$FW/Versions/B/XPCServices" "$FW/XPCServices"
 
-# 3. Thin the Sparkle Mach-Os to arm64 in place.
+# 3. Thin the Sparkle Mach-Os to arm64 in place (skip any that are already thin arm64).
 for m in Sparkle Autoupdate Updater.app/Contents/MacOS/Updater; do
-  lipo -thin arm64 "$FW/Versions/B/$m" -output "$FW/Versions/B/$m"
+  if [[ "$(lipo -archs "$FW/Versions/B/$m")" != "arm64" ]]; then
+    lipo -thin arm64 "$FW/Versions/B/$m" -output "$FW/Versions/B/$m"
+  fi
 done
 
 # 4. Resolve Sparkle through the bundle and drop absolute toolchain rpaths.
 EXE="$APP/Contents/MacOS/Skitcho"
-install_name_tool -add_rpath @executable_path/../Frameworks "$EXE"
+rpaths() { otool -l "$EXE" | awk '/cmd LC_RPATH/{r=1} r && $1=="path"{print $2; r=0}'; }
+if ! rpaths | grep -qxF '@executable_path/../Frameworks'; then
+  install_name_tool -add_rpath @executable_path/../Frameworks "$EXE"
+fi
 while IFS= read -r rp; do
-  [[ "$rp" == /* ]] && install_name_tool -delete_rpath "$rp" "$EXE"
-done < <(otool -l "$EXE" | awk '/cmd LC_RPATH/{r=1} r && $1=="path"{print $2; r=0}')
+  if [[ "$rp" == /* ]]; then
+    install_name_tool -delete_rpath "$rp" "$EXE"
+  fi
+done < <(rpaths)
 
 # 5. Sign inside-out (never --deep when signing).
 sign() {
