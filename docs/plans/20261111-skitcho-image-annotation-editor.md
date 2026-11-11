@@ -232,11 +232,11 @@
 - Create: `Sources/SkitchoCore/Style/AnnotationColor.swift`, `SizeStep.swift`, `Style.swift`
 - Create: `Tests/SkitchoCoreTests/StyleTests.swift`
 
-- [ ] `AnnotationColor` RGBA table (comment the yellow/green content exceptions), `cgColor`, `luminance`, `contrastingOutline`
-- [ ] `SizeStep` → relative [0.2…1.0], default 0.6; `Style.make(tool:sizeStep:color:imageSize:)` freezes `strokeWidth`/`fontSize`; per-tool defaults (highlighter yellow)
-- [ ] write tests: tables, freezing formula at several image sizes, Codable round-trip, contrasting outline
-- [ ] write tests for edge cases: custom color clamping, unknown size id decodes to default
-- [ ] run tests. Must pass before task 4.
+- [x] `AnnotationColor` RGBA table (comment the yellow/green content exceptions), `cgColor`, `luminance`, `contrastingOutline`
+- [x] `SizeStep` → relative [0.2…1.0], default 0.6; `Style.make(tool:sizeStep:color:imageSize:)` freezes `strokeWidth`/`fontSize`; per-tool defaults (highlighter yellow)
+- [x] write tests: tables, freezing formula at several image sizes, Codable round-trip, contrasting outline
+- [x] write tests for edge cases: custom color clamping, unknown size id decodes to default
+- [x] run tests. Must pass before task 4.
 
 ### Task 4: Geometry kernel — arrow path, shapes, hit testing
 
