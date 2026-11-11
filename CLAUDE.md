@@ -42,7 +42,8 @@ Document space is top-left origin, y-down, in image pixels. The single flip to C
 - `snapshot(contentType:)` is `nonisolated` too: NSDocument saves asynchronously and SwiftUI calls it on a
   background dispatch worker while the main thread is blocked in the save, so it must never touch main-actor
   state and never wait for the main thread (no `DispatchQueue.main.sync`, no awaited main-actor hop). It returns the
-  value of a lock-protected `SavableDocumentStore` (`Mutex<Document>`) that the main actor keeps current via
+  value of a lock-protected `SavableDocumentStore` (`Mutex<State>`: the document plus `isEditingText`) that the
+  main actor keeps current via
   `SkitchoDocument.publish()`, triggered by `EditorModel.onDocumentChange` and the text edit's change callback
   (`CanvasView.onSavableDocumentChange`, every keystroke). The "saved during a text edit" undo checkpoint
   (`TextToolController.checkpointSavedEdit`) is scheduled asynchronously from `snapshot`, never run inside it.

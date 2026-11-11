@@ -113,15 +113,24 @@
   static let readableContentTypes: [UTType] = [.skitchoDocument, .image]
   static let writableContentTypes: [UTType] = [.skitchoDocument]
   nonisolated let initial: Document             // Sendable value, set by both inits
-  private nonisolated let store: SavableDocumentStore   // Mutex<Document> (+ "text edit active" flag); seeded with `initial` by every nonisolated init
-  lazy var editor = EditorModel(document: initial, undoManager: nil) // @MainActor; created on first main-actor access (from the view); its onDocumentChange calls publish()
+  private nonisolated let store: SavableDocumentStore   // Mutex<State> (document + isEditingText); seeded with `initial` by every nonisolated init
+  lazy var editor: EditorModel = {               // @MainActor; created on first main-actor access (from the view)
+    let editor = EditorModel(document: initial, undoManager: nil)
+    editor.onDocumentChange = { [weak self] in self?.publish() }
+    return editor
+  }()
+  lazy var canvasHandle: CanvasHandle = {         // @MainActor; the window's canvas link; a running text edit is read through it
+    let handle = CanvasHandle()
+    handle.onSavableDocumentChange = { [weak self] in self?.publish() }
+    return handle
+  }()
   nonisolated init(configuration: ReadConfiguration) throws  // decoding only (PackageCodec / ImageImporter); NO main-actor work, NO MainActor.assumeIsolated
   nonisolated init()                            // blank canvas via Document.blank
   nonisolated func snapshot(contentType: UTType) throws -> Document // reads ONLY the lock-protected store; never main-actor state, never waits for the main thread
   nonisolated func fileWrapper(snapshot: Document, configuration: WriteConfiguration) throws -> FileWrapper // pure PackageCodec, never touches editor
 }
 ```
-- Correction (save crash fix): `snapshot` is `nonisolated`. NSDocument saves asynchronously and SwiftUI calls `snapshot` on a background worker (`ReferenceFileDocumentBox.snapshotForSerialization`) while the main thread is blocked in `_waitForUserInteractionUnblocking`; a main-actor `snapshot` traps in the runtime isolation check, and `DispatchQueue.main.sync` would deadlock. So `snapshot` returns the value of a lock-protected store that the main actor publishes to after every `EditorModel` document change and every live text-editor change (one hook each: `EditorModel.onDocumentChange`, `CanvasView.onSavableDocumentChange`). The undo checkpoint for a state saved during a text edit is scheduled asynchronously on the main actor (`TextToolController.checkpointSavedEdit`), skipped if the edit ended or the document moved on.
+- Correction (save crash fix): `snapshot` is `nonisolated`. NSDocument saves asynchronously and SwiftUI calls `snapshot` on a background worker (`ReferenceFileDocumentBox.snapshotForSerialization`) while the main thread is blocked in `_waitForUserInteractionUnblocking`; a main-actor `snapshot` traps in the runtime isolation check, and `DispatchQueue.main.sync` would deadlock. So `snapshot` returns the value of a lock-protected store that the main actor publishes to after every `EditorModel` document change and every live text-editor change (one hook each: `EditorModel.onDocumentChange`, `CanvasView.onSavableDocumentChange`). The undo checkpoint for a state saved during a text edit is scheduled asynchronously on the main actor (`TextToolController.checkpointSavedEdit`). It checkpoints exactly the saved state even if the user typed on before it ran, and is skipped if the edit ended or the saved state is not this edit's.
 - `DocumentGroup(newDocument: { SkitchoDocument() })` calls the `nonisolated init()`, so there is no isolation warning. `MainActor.assumeIsolated` is forbidden in document code because SwiftUI/NSDocument may read files off the main thread. If the exact form differs on the SDK, Task 2 records the working form here before later tasks start.
 - Verified in Task 2: the pattern compiles warning-free as written. Two additions: (1) Core `Document` collides with `SwiftUI.Document`, so any SkitchoUI file importing both SwiftUI and SkitchoCore adds `import struct SkitchoCore.Document` (the `SkitchoCore.Document` qualifier does not work because the `SkitchoCore` marker enum shadows the module name); (2) `DocumentGroup(newDocument:editor:)` is written with both labels (swift-format rejects the trailing-closure form); `SkitchoDocument` exposes a `nonisolated init(initial:)` for tests; tests touching static content types must be `@MainActor`.
 - Undo: `EditorModel(document:undoManager:)` takes an `UndoManager?`. `EditorWindowView` re-binds it from `@Environment(\.undoManager)`. `ReferenceFileDocument` dirty state then follows registrations on the window's manager.
