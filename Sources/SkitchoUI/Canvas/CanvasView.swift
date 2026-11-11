@@ -2,6 +2,7 @@ import AppKit
 import CoreGraphics
 import Observation
 import SkitchoCore
+import SwiftUI
 
 /// View <-> document mapping: `doc = (view - contentOrigin) / zoom` (the view is flipped, so both are y-down).
 public struct CanvasGeometry: Equatable, Sendable {
@@ -45,6 +46,9 @@ public final class CanvasView: NSView {
   private var controllers: [Tool: any ToolController] = [:]
   private let selectController: SelectPanToolController
   private var textController: TextToolController?
+  private var pixelateController: PixelateToolController?
+  /// Options bar (block size, Apply/Cancel) shown below a pending pixelate region.
+  private(set) var pixelateBar: NSHostingView<PixelateBar>?
   /// The NSTextView shown over the canvas while a text element is edited.
   private(set) var textOverlay: TextEditorOverlay?
   private var spaceDown = false
@@ -72,6 +76,10 @@ public final class CanvasView: NSView {
     textController = text
     register(text, for: .text)
     register(StampToolController(editor: editor, zoom: { box.value }, labelEditor: text), for: .stamp)
+    let pixelate = PixelateToolController(editor: editor, zoom: { box.value })
+    pixelate.stateDidChange = { [weak self] in self?.syncPixelateBar() }
+    pixelateController = pixelate
+    register(pixelate, for: .pixelate)
     updateFrameSize()
     observeEditor()
   }
@@ -126,6 +134,7 @@ public final class CanvasView: NSView {
       height: max(canvas.height * zoom + 2 * Self.margin, viewport.height))
     if frame.size != size { setFrameSize(size) }
     layoutTextOverlay()
+    layoutPixelateBar()
     needsDisplay = true
   }
 
@@ -178,6 +187,7 @@ public final class CanvasView: NSView {
       updateFrameSize()
     }
     if editor.currentTool != .text, let textController, textController.isEditing { textController.commit() }
+    if editor.currentTool != .pixelate, pixelateController?.region != nil { pixelateController?.cancel() }
     needsDisplay = true
     window?.invalidateCursorRects(for: self)
   }
@@ -219,6 +229,45 @@ public final class CanvasView: NSView {
   private func layoutTextOverlay() {
     guard let overlay = textOverlay, let session = textController?.session else { return }
     overlay.apply(session: session, geometry: canvasGeometry)
+  }
+
+  // MARK: Pixelate options bar
+
+  /// Shows, updates or removes the options bar to match the pixelate controller's pending region.
+  private func syncPixelateBar() {
+    guard let controller = pixelateController, controller.hasPendingRegion else {
+      pixelateBar?.removeFromSuperview()
+      pixelateBar = nil
+      return
+    }
+    let bar = PixelateBar(
+      blockSize: controller.blockSize,
+      canApply: true,
+      onBlockSize: { [weak controller] in controller?.blockSize = $0 },
+      onApply: { [weak controller] in controller?.apply() },
+      onCancel: { [weak controller] in controller?.cancel() })
+    if let hosting = pixelateBar {
+      hosting.rootView = bar
+    } else {
+      let hosting = NSHostingView(rootView: bar)
+      addSubview(hosting)
+      pixelateBar = hosting
+    }
+    layoutPixelateBar()
+  }
+
+  /// Places the bar centered below the region (above it when there is no room), inside the view.
+  private func layoutPixelateBar() {
+    guard let hosting = pixelateBar, let region = pixelateController?.clippedRegion else { return }
+    let size = hosting.fittingSize
+    let geometry = canvasGeometry
+    let topLeft = geometry.viewPoint(fromDocument: region.origin)
+    let bottomRight = geometry.viewPoint(fromDocument: CGPoint(x: region.maxX, y: region.maxY))
+    var x = (topLeft.x + bottomRight.x) / 2 - size.width / 2
+    var y = bottomRight.y + Spacing.xs
+    if y + size.height > bounds.maxY { y = max(topLeft.y - size.height - Spacing.xs, bounds.minY) }
+    x = min(max(x, bounds.minX), max(bounds.maxX - size.width, bounds.minX))
+    hosting.frame = CGRect(origin: CGPoint(x: x.rounded(), y: y.rounded()), size: size)
   }
 
   // MARK: Drawing

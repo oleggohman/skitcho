@@ -442,9 +442,9 @@
 - Create: `Sources/SkitchoUI/Canvas/PixelateToolController.swift`, `Sources/SkitchoUI/Panels/ApplyCancelBar.swift`
 - Create: `Tests/SkitchoUITests/PixelateToolTests.swift`
 
-- [ ] drag region with marching ants; block-size slider; Apply (primary)/Cancel (secondary) bar; Return/Esc keys
-- [ ] write tests: apply calls the pixelate command with the clipped rect and is undoable, cancel leaves the document unchanged
-- [ ] run tests. Must pass before task 22.
+- [x] drag region with marching ants; block-size slider; Apply (primary)/Cancel (secondary) bar; Return/Esc keys (block-size slider lives in Panels/PixelateBar.swift; ants are static dashed)
+- [x] write tests: apply calls the pixelate command with the clipped rect and is undoable, cancel leaves the document unchanged
+- [x] run tests. Must pass before task 22.
 
 ### Task 22: Crop and expand canvas
 
