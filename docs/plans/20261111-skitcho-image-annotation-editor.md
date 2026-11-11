@@ -556,10 +556,10 @@
 - Create: `scripts/app-icon.swift`, `Resources/AppIcon.icns`
 - Modify: `scripts/bundle.sh`, `Resources/Info.plist.template`, `scripts/test-bundle.sh`
 
-- [ ] `app-icon.swift`: CoreGraphics `darkBlue` squircle with a blue→lavender gradient arrow (colors from the token values), rendered at every iconset size (16…1024 incl. @2x), then `iconutil -c icns`
-- [ ] bundle.sh copies `AppIcon.icns`; Info.plist gets `CFBundleIconFile=AppIcon`
-- [ ] write test: test-bundle asserts the icns exists in the bundle and `iconutil -c iconset` on it yields all 10 sizes
-- [ ] run tests + test-bundle. Must pass before task 30.
+- [x] `app-icon.swift`: CoreGraphics `darkBlue` squircle with a blue→lavender gradient arrow (colors from the token values), rendered at every iconset size (16…1024 incl. @2x), then `iconutil -c icns`
+- [x] bundle.sh copies `AppIcon.icns`; Info.plist gets `CFBundleIconFile=AppIcon`
+- [x] write test: test-bundle asserts the icns exists in the bundle and `iconutil -c iconset` on it yields all 10 sizes
+- [x] run tests + test-bundle. Must pass before task 30.
 
 ### Task 30: Release script with dry-run test
 

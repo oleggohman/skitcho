@@ -42,6 +42,14 @@ expect_key UTExportedTypeDeclarations:0:UTTypeTagSpecification:public.filename-e
 expect_key SUFeedURL https://github.com/oleggohman/skitcho/releases/latest/download/appcast.xml
 expect_key SUEnableAutomaticChecks true
 expect_key SUScheduledCheckInterval 86400
+expect_key CFBundleIconFile AppIcon
+ICNS="$APP/Contents/Resources/AppIcon.icns"
+[[ -f "$ICNS" ]] || fail "missing AppIcon.icns in bundle"
+ICONSET_DIR="$(mktemp -d)"
+iconutil -c iconset "$ICNS" -o "$ICONSET_DIR/AppIcon.iconset" || fail "iconutil cannot read AppIcon.icns"
+icon_count="$(find "$ICONSET_DIR/AppIcon.iconset" -name 'icon_*.png' | wc -l | tr -d ' ')"
+rm -rf "$ICONSET_DIR"
+[[ "$icon_count" == "10" ]] || fail "AppIcon.icns has $icon_count sizes, expected 10"
 plist_get SUPublicEDKey >/dev/null || fail "Info.plist key SUPublicEDKey missing"
 plist_get CFBundleShortVersionString >/dev/null || fail "CFBundleShortVersionString missing"
 plist_get CFBundleVersion >/dev/null || fail "CFBundleVersion missing"

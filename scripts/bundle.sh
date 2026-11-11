@@ -38,6 +38,8 @@ sed -e "s|@SHORT_VERSION@|$SHORT_VERSION|g" \
   Resources/Info.plist.template >"$APP/Contents/Info.plist"
 plutil -lint "$APP/Contents/Info.plist" >/dev/null
 
+cp Resources/AppIcon.icns "$APP/Contents/Resources/AppIcon.icns"
+
 # SwiftPM resource bundles, if any target declares resources.
 shopt -s nullglob
 for b in "$BIN_DIR"/*.bundle; do
