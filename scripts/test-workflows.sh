@@ -62,3 +62,37 @@ for f in "${files[@]}"; do
   done < <(grep -E '^[[:space:]]*(- )?uses:' "$f")
 done
 echo "ok: workflow and script grep checks (${#files[@]} workflows, scripts/*.sh)"
+
+# Security workflows: they must exist, start from empty token permissions and never persist credentials.
+for w in codeql dependency-review scorecard trivy; do
+  [[ -f ".github/workflows/$w.yml" ]] || fail "missing .github/workflows/$w.yml"
+done
+for w in codeql scorecard trivy; do
+  grep -qE '^permissions:[[:space:]]*\{\}[[:space:]]*$' ".github/workflows/$w.yml" ||
+    fail "$w.yml must set top-level 'permissions: {}'"
+done
+for f in "${files[@]}"; do
+  # Every checkout must opt out of persisting the token.
+  n_checkout="$(grep -cE 'uses:[[:space:]]*actions/checkout@' "$f" || true)"
+  n_persist="$(grep -cE '^[[:space:]]*persist-credentials:[[:space:]]*false' "$f" || true)"
+  [[ "$n_checkout" -le "$n_persist" ]] || fail "$f: actions/checkout without persist-credentials: false"
+  # Pins must carry a trailing version comment.
+  hits="$(grep -E '^[[:space:]]*(- )?uses:' "$f" | grep -vE '@[0-9a-f]{40}[[:space:]]+#[[:space:]]*v[0-9]+[.][0-9]+[.][0-9]+' || true)"
+  [[ -z "$hits" ]] || fail "$f: action pin without '# vX.Y.Z' comment: $hits"
+  # No secrets in these workflows beyond what the repo's other workflows already use.
+  case "$f" in
+    *codeql.yml | *dependency-review.yml | *scorecard.yml | *trivy.yml)
+      hits="$(code_lines 'secrets\.' "$f")"
+      [[ -z "$hits" ]] || fail "$f references secrets: $hits"
+      ;;
+  esac
+done
+# The Trivy binary is pinned by a hardcoded checksum (trivy-action is not allowed by policy).
+grep -qE '^[[:space:]]*TRIVY_SHA256:[[:space:]]*[0-9a-f]{64}[[:space:]]*$' .github/workflows/trivy.yml ||
+  fail "trivy.yml: TRIVY_SHA256 must be a hardcoded 64-hex checksum"
+grep -q 'sha256sum -c' .github/workflows/trivy.yml || fail "trivy.yml does not verify the download checksum"
+! grep -qE 'uses:[[:space:]]*aquasecurity/' .github/workflows/trivy.yml || fail "trivy.yml must not use trivy-action"
+for y in .github/dependabot.yml .github/ISSUE_TEMPLATE/*.yml; do
+  ruby -ryaml -e 'YAML.safe_load(File.read(ARGV[0]))' "$y" || fail "$y does not parse"
+done
+echo "ok: security workflow checks, dependabot and issue form YAML"
