@@ -248,6 +248,65 @@ private final class RecordingDocument: NSDocument {
     #expect(!nsDocument.isDocumentEdited)
   }
 
+  // MARK: Symlinked targets
+
+  @Test func saveOnAJPEGOpenedThroughASymlinkWritesThroughAndKeepsTheLink() throws {
+    let black = try blackJPEG()
+    let real = try writeFile("real.jpg", black)
+    let link = directory.appendingPathComponent("link.jpg")
+    try FileManager.default.createSymbolicLink(at: link, withDestinationURL: real)
+    let nsDocument = document(type: .jpeg, url: link)
+    nsDocument.fileModificationDate = Date(timeIntervalSince1970: 1_000_000)
+    let coordinator = makeCoordinator(makeEditor(), nsDocument: nsDocument)
+
+    coordinator.save()
+
+    let data = try Data(contentsOf: real)
+    #expect(isJPEG(data))
+    #expect(data != black)
+    #expect(try FileManager.default.destinationOfSymbolicLink(atPath: link.path) == real.path)
+    #expect(!nsDocument.isDocumentEdited)
+    var fresh = real
+    fresh.removeAllCachedResourceValues()
+    let date = try fresh.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate
+    #expect(date != nil)
+    #expect(nsDocument.fileModificationDate == date)
+  }
+
+  @Test func saveAsOntoASymlinkWritesThroughAndKeepsTheLink() throws {
+    let black = try blackJPEG()
+    let real = try writeFile("real.jpg", black)
+    let link = directory.appendingPathComponent("link.jpg")
+    try FileManager.default.createSymbolicLink(at: link, withDestinationURL: real)
+    let nsDocument = document(type: .png, url: nil)
+    let log = PanelLog()
+    log.choice = SavePanelChoice(url: link, format: .jpeg)
+    let coordinator = makeCoordinator(makeEditor(), nsDocument: nsDocument, log: log)
+
+    coordinator.saveAs()
+
+    let data = try Data(contentsOf: real)
+    #expect(isJPEG(data))
+    #expect(data != black)
+    #expect(try FileManager.default.destinationOfSymbolicLink(atPath: link.path) == real.path)
+  }
+
+  @Test func aDanglingSymlinkTargetCreatesTheDestinationAndKeepsTheLink() throws {
+    let destination = directory.appendingPathComponent("new.jpg")
+    let link = directory.appendingPathComponent("dangling.jpg")
+    // A relative destination: it resolves against the link's folder.
+    try FileManager.default.createSymbolicLink(atPath: link.path, withDestinationPath: "new.jpg")
+    let nsDocument = document(type: .png, url: nil)
+    let log = PanelLog()
+    log.choice = SavePanelChoice(url: link, format: .jpeg)
+    let coordinator = makeCoordinator(makeEditor(), nsDocument: nsDocument, log: log)
+
+    coordinator.saveAs()
+
+    #expect(isJPEG(try Data(contentsOf: destination)))
+    #expect(try FileManager.default.destinationOfSymbolicLink(atPath: link.path) == "new.jpg")
+  }
+
   @Test func isSameFileSeesThroughSpellingsOfOnePath() throws {
     let file = try writeFile("same.jpg", blackJPEG())
     let other = try writeFile("other.jpg", blackJPEG())

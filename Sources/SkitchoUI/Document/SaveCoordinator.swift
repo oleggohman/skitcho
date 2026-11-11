@@ -174,7 +174,7 @@ public final class SaveCoordinator {
     handle.canvas?.commitTextEdit()
     do {
       let data = try SaveFormat.jpegData(for: editor.document)
-      try writer(data, target, nsDocument)
+      try writer(data, Self.resolvingFinalSymlinks(target), nsDocument)
     } catch {
       onError?(error.localizedDescription)
       return
@@ -183,8 +183,10 @@ public final class SaveCoordinator {
     guard markSaved else { return }
     // NSDocument compares this date with its own file, so it is updated only when that file was written. After a
     // JPEG Save As the document keeps its original `fileURL` (a JPEG never becomes the document's saved type).
-    if let fileURL = nsDocument.fileURL, Self.isSameFile(fileURL, target),
-      let date = try? target.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate
+    // The date is read from the file that was written, not from a symlink that points to it.
+    let written = Self.resolvingFinalSymlinks(target)
+    if let fileURL = nsDocument.fileURL, Self.isSameFile(fileURL, written),
+      let date = try? written.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate
     {
       nsDocument.fileModificationDate = date
     }
@@ -212,9 +214,24 @@ public final class SaveCoordinator {
     return resolvedPath(first) == resolvedPath(second)
   }
 
+  /// Follows `url` while its last component is a symlink (relative destinations are taken against the link's
+  /// folder), so a write lands on the real file and keeps the link. A dangling link resolves to its missing
+  /// destination. A path that is not a symlink, or a chain longer than the limit (a loop), is returned unchanged.
+  static func resolvingFinalSymlinks(_ url: URL) -> URL {
+    let fileManager = FileManager.default
+    var current = url
+    for _ in 0..<32 {
+      guard let destination = try? fileManager.destinationOfSymbolicLink(atPath: current.path) else { return current }
+      current = URL(fileURLWithPath: destination, relativeTo: current.deletingLastPathComponent()).standardizedFileURL
+    }
+    return url
+  }
+
   /// The default writer: a temp file next to the target, swapped in under file coordination that excludes the
   /// document's own presenter (so no auto-revert can discard the vector annotations).
-  static let coordinatedReplace: Writer = { data, target, nsDocument in
+  static let coordinatedReplace: Writer = { data, requested, nsDocument in
+    // Write through a symlink instead of replacing the link node.
+    let target = resolvingFinalSymlinks(requested)
     let fileManager = FileManager.default
     let exists = fileManager.fileExists(atPath: target.path)
     let tempDirectory = try fileManager.url(
