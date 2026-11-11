@@ -123,18 +123,44 @@ import Testing
         let path = ArrowPath.make(from: .zero, to: CGPoint(x: length, y: 0), width: width, doubleHeaded: true)
         var points = vertices(of: path)
         if points.count > 1, points.first == points.last { points.removeLast() }
-        let count = points.count
-        #expect(count == 10)
-        for i in 0..<count {
-          for j in (i + 1)..<count {
-            // Edges i -> i+1 and j -> j+1; adjacent edges share a vertex and are skipped.
-            let adjacent = j == i + 1 || (i == 0 && j == count - 1)
-            if adjacent { continue }
-            let crossing = segmentsIntersect(
-              points[i], points[(i + 1) % count], points[j], points[(j + 1) % count])
-            #expect(!crossing, "length \(length) width \(width): edge \(i) crosses edge \(j)")
-          }
-        }
+        #expect(points.count == 10)
+        expectNoSelfIntersection(path, "length \(length) width \(width)")
+      }
+    }
+  }
+
+  @Test func shortWideSingleHeadedArrowOutlineDoesNotSelfIntersect() {
+    // Below about 1.6w the head is capped and the shaft would reach the barbs (e.g. length 90 at width 100).
+    for length in [9.0, 15, 30, 60, 90, 150] {
+      for width in [4.0, 10, 20, 100] {
+        let path = ArrowPath.make(from: .zero, to: CGPoint(x: length, y: 0), width: width)
+        expectNoSelfIntersection(path, "length \(length) width \(width)")
+      }
+    }
+  }
+
+  @Test func shaftStaysInsideTheHeadAtTheHeadBase() {
+    // Length 90 at width 100: head 36, half-width 25.2, barb sweep 5.4. At the head base (x = 54) the barb edge
+    // is at 25.2 / 1.15 = 21.9, so the shaft half-width there (0.75 * 25.2 = 18.9) must be below it.
+    let points = vertices(of: ArrowPath.make(from: .zero, to: CGPoint(x: 90, y: 0), width: 100))
+    #expect(has(points, 54, 18.9) && has(points, 54, -18.9))
+    #expect(has(points, 48.6, 25.2) && has(points, 90, 0))
+  }
+
+  /// Checks the straight edges of `path` (the round tail cap is not a vertex) for proper crossings.
+  private func expectNoSelfIntersection(_ path: CGPath, _ label: String) {
+    var points = vertices(of: path)
+    if points.count > 1, points.first == points.last { points.removeLast() }
+    let count = points.count
+    #expect(count >= 4, "\(label)")
+    for i in 0..<count {
+      for j in (i + 1)..<count {
+        // Edges i -> i+1 and j -> j+1; adjacent edges share a vertex and are skipped.
+        let adjacent = j == i + 1 || (i == 0 && j == count - 1)
+        if adjacent { continue }
+        let crossing = segmentsIntersect(
+          points[i], points[(i + 1) % count], points[j], points[(j + 1) % count])
+        #expect(!crossing, "\(label): edge \(i) crosses edge \(j)")
       }
     }
   }

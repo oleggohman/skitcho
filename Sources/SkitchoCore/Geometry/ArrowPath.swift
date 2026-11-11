@@ -8,7 +8,7 @@ import Foundation
 /// - head half-width `headHalfWidthFactor * head`
 /// - barbs sit `barbSweepFactor * head` behind the head base, which gives the swept look
 /// - shaft half-width `baseHalfWidthFactor * w` at the head base, `tailHalfWidthFactor * w` at the tail
-///   (the single-headed tail ends in a round cap)
+///   (the single-headed tail ends in a round cap), at most `maxBaseFraction` of the head half-width
 public enum ArrowPath {
   /// Nominal head length as a multiple of the stroke width.
   static let headLengthFactor = 4.0
@@ -20,6 +20,10 @@ public enum ArrowPath {
   static let baseHalfWidthFactor = 0.45
   /// Shaft half-width at the tail, as a multiple of the stroke width.
   static let tailHalfWidthFactor = 0.15
+  /// The shaft half-width at the head base never exceeds this fraction of the head half-width. It must stay below
+  /// `1 / (1 + barbSweepFactor)` (about 0.87), where the barb edge crosses the head base; a wider shaft pokes out
+  /// of the head there and the outline of a short, wide arrow crosses itself.
+  static let maxBaseFraction = 0.75
   /// Shortest drag that creates an arrow, as a multiple of the stroke width (independent of the head size).
   static let minimumLengthFactor = 9.0
   /// The head never exceeds this fraction of the arrow length.
@@ -52,8 +56,8 @@ public enum ArrowPath {
     let head = headLength(width: width, length: length)
     let headHalf = head * headHalfWidthFactor
     let sweep = head * barbSweepFactor
-    // The shaft never gets wider than the head (short, wide arrows cap the head at a fraction of the length).
-    let baseHalf = min(width * baseHalfWidthFactor, headHalf)
+    // The shaft stays inside the head (short, wide arrows cap the head at a fraction of the length).
+    let baseHalf = min(width * baseHalfWidthFactor, headHalf * maxBaseFraction)
     let tailHalf = min(width * tailHalfWidthFactor, baseHalf)
 
     // Local frame: x along the arrow from start to end, y perpendicular.
