@@ -626,10 +626,10 @@
 - [x] ➕ added `SpacePanTests` (Space-drag pans the scroll view instead of drawing; drawing resumes after release): the only wiring gap was that Space-pan had no automated test
 
 ### Task 33: [Final] Update documentation
-- [ ] `README.md`: features, install from Releases, build/test commands (arm64), shortcuts, file format, auto-update, clean-room statement
-- [ ] `CONTRIBUTING.md` (branching, Conventional Commits, serial arm64 tests, sandbox note) and `SECURITY.md` (reporting, update signing model)
-- [ ] `CLAUDE.md`: canonical commands, "run only via build/Skitcho.app", coordinate rule, document concurrency pattern, token rules, arm64-only rule
-- [ ] move this plan to `docs/plans/completed/`
+- [x] `README.md`: features, install from Releases, build/test commands (arm64), shortcuts, file format, auto-update, clean-room statement
+- [x] `CONTRIBUTING.md` (branching, Conventional Commits, serial arm64 tests, sandbox note) and `SECURITY.md` (reporting, update signing model)
+- [x] `CLAUDE.md`: canonical commands, "run only via build/Skitcho.app", coordinate rule, document concurrency pattern, token rules, arm64-only rule
+- [x] move this plan to `docs/plans/completed/` (moved by harness after reviews)
 
 ## Post-Completion
 *Items requiring manual intervention or external systems - no checkboxes, informational only*
