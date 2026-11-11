@@ -339,11 +339,11 @@
 - Create: `Sources/SkitchoCore/Editor/ElementClipboard.swift`
 - Create: `Tests/SkitchoCoreTests/EditorCommandTests.swift`
 
-- [ ] `applyColor/applySizeStep/toggleTextStyle/toggleDoubleHead` target the selection (recomputing frozen sizes with the current image), else the "next element" style
-- [ ] `ElementClipboard.encode/decode(Data)`; paste inserts with new IDs, offset +10, and selects them
-- [ ] image-op commands wrapping `ImageOps` with names ("Crop Image", "Resize Image", "Pixelate", "Rotate", "Flip", "Expand Canvas")
-- [ ] write tests: style to selection vs next element, paste offsets/new IDs, invalid data ignored, each image op undoable
-- [ ] run tests. Must pass before task 13.
+- [x] `applyColor/applySizeStep/toggleTextStyle/toggleDoubleHead` target the selection (recomputing frozen sizes with the current image), else the "next element" style
+- [x] `ElementClipboard.encode/decode(Data)`; paste inserts with new IDs, offset +10, and selects them
+- [x] image-op commands wrapping `ImageOps` with names ("Crop Image", "Resize Image", "Pixelate", "Rotate", "Flip", "Expand Canvas")
+- [x] write tests: style to selection vs next element, paste offsets/new IDs, invalid data ignored, each image op undoable
+- [x] run tests. Must pass before task 13.
 
 ### Task 13: Import and export (Data-based)
 

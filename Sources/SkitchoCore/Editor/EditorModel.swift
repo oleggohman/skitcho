@@ -14,6 +14,12 @@ public final class EditorModel {
   /// Selected element IDs (z-order is always taken from `document.elements`).
   public private(set) var selection: Set<UUID> = []
 
+  /// Style choices for the next element drawn when nothing is selected (nil color = the tool's default).
+  public var nextColor: AnnotationColor?
+  public var nextSizeStep: SizeStep = .default
+  public var nextTextStyled = true
+  public var nextDoubleHeaded = false
+
   /// Snapshot taken by `beginInteractive`; nil when no gesture is running.
   private var interactiveStart: Document?
 
@@ -162,5 +168,145 @@ public final class EditorModel {
       }
       document.elements = elements
     }
+  }
+
+  // MARK: Style targeting
+
+  /// The style a new element drawn with `tool` gets, from the next-element choices and the current canvas.
+  public func nextStyle(for tool: Tool) -> Style? {
+    tool.defaultStyle(sizeStep: nextSizeStep, color: nextColor, imageSize: document.canvasSize)
+  }
+
+  /// Applies `color` to the selection, or to the next element when nothing is selected.
+  public func applyColor(_ color: AnnotationColor) {
+    guard !selection.isEmpty else {
+      nextColor = color
+      return
+    }
+    updateSelection("Change Color") { $0.style.color = color }
+  }
+
+  /// Applies `step` to the selection (recomputing frozen sizes from the current canvas), else to the next element.
+  public func applySizeStep(_ step: SizeStep) {
+    guard !selection.isEmpty else {
+      nextSizeStep = step
+      return
+    }
+    let canvas = document.canvasSize
+    updateSelection("Change Size") { element in
+      let fresh = Style.make(
+        tool: EditorModel.styleTool(of: element), sizeStep: step, color: element.style.color, imageSize: canvas)
+      element.style = fresh
+    }
+  }
+
+  /// Toggles the styled ("bubble") outline of the selected text elements, else of the next text element.
+  public func toggleTextStyle() {
+    guard !selection.isEmpty else {
+      nextTextStyled.toggle()
+      return
+    }
+    let texts = selectedElements.compactMap { element -> Bool? in
+      if case .text(let content) = element.kind { return content.styled }
+      return nil
+    }
+    guard !texts.isEmpty else { return }
+    let target = !texts.allSatisfy { $0 }
+    updateSelection("Change Text Style") { element in
+      if case .text(var content) = element.kind {
+        content.styled = target
+        element.kind = .text(content)
+      }
+    }
+  }
+
+  /// Toggles the second arrow head of the selected arrows, else of the next arrow.
+  public func toggleDoubleHead() {
+    guard !selection.isEmpty else {
+      nextDoubleHeaded.toggle()
+      return
+    }
+    let heads = selectedElements.compactMap { element -> Bool? in
+      if case .arrow(_, _, let double) = element.kind { return double }
+      return nil
+    }
+    guard !heads.isEmpty else { return }
+    let target = !heads.allSatisfy { $0 }
+    updateSelection("Toggle Double Head") { element in
+      if case .arrow(let start, let end, _) = element.kind {
+        element.kind = .arrow(start: start, end: end, doubleHeaded: target)
+      }
+    }
+  }
+
+  private func updateSelection(_ name: String, _ change: @escaping (inout Element) -> Void) {
+    let ids = selection
+    perform(name) { document in
+      for index in document.elements.indices where ids.contains(document.elements[index].id) {
+        change(&document.elements[index])
+      }
+    }
+  }
+
+  /// The style family used to recompute an element's frozen sizes.
+  private static func styleTool(of element: Element) -> StyleTool {
+    switch element.kind {
+    case .arrow: .arrow
+    case .line: .line
+    case .rect(_, let rounded): rounded ? .roundedRect : .rect
+    case .ellipse: .ellipse
+    case .freehand(_, let highlighter): highlighter ? .highlighter : .marker
+    case .text: .text
+    case .stamp: .stamp
+    }
+  }
+
+  // MARK: Element clipboard
+
+  /// Encoded copy of the selection, or nil when nothing is selected.
+  public func copySelectionData() -> Data? { ElementClipboard.encode(selectedElements) }
+
+  /// Pastes elements decoded from `data` (new IDs, offset +10) on top and selects them.
+  /// Returns false and changes nothing when the data is not valid clipboard content.
+  @discardableResult
+  public func paste(_ data: Data) -> Bool {
+    guard let decoded = ElementClipboard.decode(data) else { return false }
+    let copies = ElementClipboard.duplicated(decoded, offset: ElementClipboard.pasteOffset)
+    perform("Paste") { $0.elements.append(contentsOf: copies) }
+    selection = Set(copies.map(\.id))
+    return true
+  }
+
+  // MARK: Image operations
+
+  /// Runs `operation` on the document; on success it becomes one undo step named `name`. Errors leave
+  /// the document untouched.
+  private func performImageOp(_ name: String, _ operation: (Document) throws -> Document) throws {
+    let result = try operation(document)
+    perform(name) { $0 = result }
+  }
+
+  public func crop(to rect: CGRect) throws {
+    try performImageOp("Crop Image") { try ImageOps.crop($0, rect: rect) }
+  }
+
+  public func resize(scale: Double) throws {
+    try performImageOp("Resize Image") { try ImageOps.resize($0, scale: scale) }
+  }
+
+  public func pixelate(rect: CGRect, blockSize: Int) throws {
+    try performImageOp("Pixelate") { try ImageOps.pixelate($0, rect: rect, blockSize: blockSize) }
+  }
+
+  public func rotate90(clockwise: Bool) throws {
+    try performImageOp("Rotate") { try ImageOps.rotate90($0, clockwise: clockwise) }
+  }
+
+  public func flip(axis: FlipAxis) throws {
+    try performImageOp("Flip") { try ImageOps.flip($0, axis: axis) }
+  }
+
+  public func expandCanvas(edge: CanvasEdge, amount: Int) throws {
+    try performImageOp("Expand Canvas") { try ImageOps.expandCanvas($0, edge: edge, amount: amount) }
   }
 }
