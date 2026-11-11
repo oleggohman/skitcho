@@ -116,7 +116,10 @@ import Testing
     let line = Element(kind: .line(start: CGPoint(x: 50, y: 60), end: CGPoint(x: 5, y: 5)), style: s)
     #expect(line.bounds == CGRect(x: 5, y: 5, width: 45, height: 55))
     let arrow = Element(kind: .arrow(start: .zero, end: CGPoint(x: 200, y: 0), doubleHeaded: false), style: s)
-    #expect(arrow.bounds.maxX == 200 && arrow.bounds.minX == 0)
+    // Bounds are the arrow path (with its round tail cap) padded by the white outline.
+    let fill = ArrowPath.make(from: .zero, to: CGPoint(x: 200, y: 0), width: s.strokeWidth).boundingBoxOfPath
+    let pad = ArrowPath.outlineWidth(width: s.strokeWidth) / 2
+    #expect(abs(arrow.bounds.maxX - (fill.maxX + pad)) < 1e-9 && abs(arrow.bounds.minX - (fill.minX - pad)) < 1e-9)
     #expect(arrow.bounds.height > 0)
   }
 

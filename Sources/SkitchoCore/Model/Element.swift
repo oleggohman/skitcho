@@ -50,7 +50,9 @@ public struct Element: Sendable, Equatable, Codable, Identifiable {
     switch kind {
     case .arrow(let start, let end, let doubleHeaded):
       let path = ArrowPath.make(from: start, to: end, width: style.strokeWidth, doubleHeaded: doubleHeaded)
-      return path.isEmpty ? Element.rect(spanning: start, end) : path.boundingBoxOfPath
+      // The white outline extends past the fill by half its line width.
+      let pad = ArrowPath.outlineWidth(width: style.strokeWidth) / 2
+      return path.isEmpty ? Element.rect(spanning: start, end) : path.boundingBoxOfPath.insetBy(dx: -pad, dy: -pad)
     case .line(let start, let end):
       return Element.rect(spanning: start, end)
     case .rect(let rect, _), .ellipse(let rect):
@@ -88,7 +90,9 @@ public struct Element: Sendable, Equatable, Codable, Identifiable {
     switch kind {
     case .arrow(let start, let end, let doubleHeaded):
       let path = ArrowPath.make(from: start, to: end, width: style.strokeWidth, doubleHeaded: doubleHeaded)
-      return HitTest.filled(path: path, point: point, tolerance: tolerance)
+      return HitTest.filled(
+        path: path, strokeWidth: ArrowPath.outlineWidth(width: style.strokeWidth), point: point,
+        tolerance: tolerance)
     case .line(let start, let end):
       return HitTest.stroke(
         path: ShapePaths.line(from: start, to: end), strokeWidth: style.strokeWidth, point: point,

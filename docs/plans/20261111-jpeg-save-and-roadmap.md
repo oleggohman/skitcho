@@ -169,14 +169,14 @@ The maintainer is away and asked for autonomous execution. Decisions not settled
 - Modify: `Tests/SkitchoCoreTests/GeometryTests.swift`, `Tests/SkitchoCoreTests/RendererShapeTests.swift`
 - Delete: `docs/backlog/arrow-skitch-style-look.md`
 
-- [ ] apply the target constants (head 4w capped at 0.4·L, headHalf 0.7·head, swept barbs, base half 0.45w, tail half 0.15w with a round cap) to single- and double-headed arrows, with the constants in one documented place
-- [ ] keep `ArrowPath.minimumLength` at 9w: decouple it from the head factor (`[decision]`), so Task 1's minimum-length test still holds
-- [ ] render the white round-join outline under the fill, with one shared shadow; pad bounds by the outline
-- [ ] write a test that a short double-headed arrow has no self-intersecting outline
-- [ ] write geometry tests that pin the new numbers: head half-width, base half-width, tail half-width, barb sweep, cap at 0.4·L, symmetry, zero length
-- [ ] write render tests: white outline pixels just outside the fill edge on a dark background; fill colour inside; no spike past the tip by more than the outline width; shadow present when enabled
-- [ ] `git rm docs/backlog/arrow-skitch-style-look.md` in this task's commit
-- [ ] run tests — must pass before task 3
+- [x] apply the target constants (head 4w capped at 0.4·L, headHalf 0.7·head, swept barbs, base half 0.45w, tail half 0.15w with a round cap) to single- and double-headed arrows, with the constants in one documented place
+- [x] keep `ArrowPath.minimumLength` at 9w: decouple it from the head factor (`[decision]`), so Task 1's minimum-length test still holds
+- [x] render the white round-join outline under the fill, with one shared shadow; pad bounds by the outline
+- [x] write a test that a short double-headed arrow has no self-intersecting outline
+- [x] write geometry tests that pin the new numbers: head half-width, base half-width, tail half-width, barb sweep, cap at 0.4·L, symmetry, zero length
+- [x] write render tests: white outline pixels just outside the fill edge on a dark background; fill colour inside; no spike past the tip by more than the outline width; shadow present when enabled
+- [x] `git rm docs/backlog/arrow-skitch-style-look.md` in this task's commit
+- [x] run tests — must pass before task 3
 
 ### Task 3: Esc returns to the Select tool
 

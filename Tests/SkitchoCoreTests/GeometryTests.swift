@@ -8,19 +8,22 @@ import Testing
   // MARK: arrow
 
   @Test func arrowHeadGrowsWithWidthAndIsCapped() {
-    #expect(ArrowPath.headLength(width: 10, length: 1000) == 30)
-    #expect(ArrowPath.headLength(width: 20, length: 1000) == 60)
+    #expect(ArrowPath.headLength(width: 10, length: 1000) == 40)
+    #expect(ArrowPath.headLength(width: 20, length: 1000) == 80)
     // Capped at 0.4 * length.
     #expect(abs(ArrowPath.headLength(width: 10, length: 50) - 20) < 1e-9)
+    // The minimum length is 9w and does not follow the head factor.
     #expect(ArrowPath.minimumLength(width: 10) == 90)
+    #expect(ArrowPath.minimumLength(width: 0) == 0)
   }
 
   @Test func arrowTipAndHeadCapInPath() {
     let path = ArrowPath.make(from: .zero, to: CGPoint(x: 50, y: 0), width: 10)
     let box = path.boundingBoxOfPath
     #expect(abs(box.maxX - 50) < 1e-9)
-    #expect(abs(box.minX) < 1e-9)
-    // Head base is at x = 50 - 20 = 30 (0.4 cap): the widest part sits there.
+    // The round tail cap reaches half the tail width behind the start (0.15 * 10 = 1.5).
+    #expect(abs(box.minX + 1.5) < 1e-9)
+    // Head base is at x = 50 - 20 = 30 (0.4 cap); the barbs are swept back to x = 27.
     #expect(path.contains(CGPoint(x: 49, y: 0)))
     #expect(!path.contains(CGPoint(x: 49, y: 5)))
     #expect(path.contains(CGPoint(x: 31, y: 10)))
@@ -42,16 +45,17 @@ import Testing
   @Test func arrowTapersFromTailToHead() {
     let path = ArrowPath.make(from: .zero, to: CGPoint(x: 300, y: 0), width: 20)
     // Half-width near the tail is smaller than just before the head.
-    #expect(path.contains(CGPoint(x: 2, y: 1)))
-    #expect(!path.contains(CGPoint(x: 2, y: 3)))
-    #expect(path.contains(CGPoint(x: 230, y: 4)))
+    #expect(path.contains(CGPoint(x: 2, y: 2)))
+    #expect(!path.contains(CGPoint(x: 2, y: 4)))
+    #expect(path.contains(CGPoint(x: 200, y: 8)))
+    #expect(path.contains(CGPoint(x: 230, y: 12)))
   }
 
   @Test func arrowRotatesWithDirection() {
     let path = ArrowPath.make(from: .zero, to: CGPoint(x: 0, y: 100), width: 10)
     let box = path.boundingBoxOfPath
     #expect(abs(box.maxY - 100) < 1e-9)
-    #expect(abs(box.width - 36) < 1e-6)  // head half-width = 0.6 * 30
+    #expect(abs(box.width - 56) < 1e-6)  // head half-width = 0.7 * 40
   }
 
   @Test func doubleHeadedHasHeadAtStart() {
@@ -64,12 +68,87 @@ import Testing
   }
 
   @Test func shortWideArrowShaftIsNeverWiderThanItsHead() {
-    // Length 15 at width 20: the head is capped at 6 long, so its half-width is 3.6 (< 0.25 * width = 5).
+    // Length 15 at width 20: the head is capped at 6 long, so its half-width is 4.2 (< 0.45 * width = 9).
     for doubleHeaded in [false, true] {
       let path = ArrowPath.make(from: .zero, to: CGPoint(x: 15, y: 0), width: 20, doubleHeaded: doubleHeaded)
-      let headHalf = ArrowPath.headLength(width: 20, length: 15) * 0.6
+      let headHalf = ArrowPath.headLength(width: 20, length: 15) * 0.7
       #expect(abs(path.boundingBoxOfPath.height - 2 * headHalf) < 1e-9, "\(path.boundingBoxOfPath)")
     }
+  }
+
+  /// Vertices of the straight segments of `path` (move and line elements), in the path's own space.
+  private func vertices(of path: CGPath) -> [CGPoint] {
+    var points: [CGPoint] = []
+    path.applyWithBlock { element in
+      let kind = element.pointee.type
+      if kind == .moveToPoint || kind == .addLineToPoint { points.append(element.pointee.points[0]) }
+    }
+    return points
+  }
+
+  private func has(_ points: [CGPoint], _ x: Double, _ y: Double) -> Bool {
+    points.contains { abs($0.x - x) < 1e-9 && abs($0.y - y) < 1e-9 }
+  }
+
+  @Test func arrowNumbersArePinned() {
+    // w = 10, length 300: head 40, head half-width 28, barb sweep 6, base half 4.5, tail half 1.5.
+    let single = vertices(of: ArrowPath.make(from: .zero, to: CGPoint(x: 300, y: 0), width: 10))
+    #expect(has(single, 300, 0))  // tip
+    #expect(has(single, 254, 28) && has(single, 254, -28))  // swept barbs: head base 260 - 0.15 * 40
+    #expect(has(single, 260, 4.5) && has(single, 260, -4.5))  // shaft half-width at the head base
+    #expect(has(single, 0, 1.5) && has(single, 0, -1.5))  // tail half-width
+
+    let double = vertices(of: ArrowPath.make(from: .zero, to: CGPoint(x: 300, y: 0), width: 10, doubleHeaded: true))
+    #expect(has(double, 0, 0) && has(double, 300, 0))
+    #expect(has(double, 46, 28) && has(double, 254, -28))
+    #expect(has(double, 40, 4.5) && has(double, 260, -4.5))
+  }
+
+  @Test func arrowTailHasARoundCap() {
+    let path = ArrowPath.make(from: .zero, to: CGPoint(x: 300, y: 0), width: 20)
+    // Tail half-width 3: the cap bulges 3 behind the start and stays round (a corner would contain (-2.2, 2.2)).
+    #expect(path.contains(CGPoint(x: -2.5, y: 0)))
+    #expect(!path.contains(CGPoint(x: -3.5, y: 0)))
+    #expect(!path.contains(CGPoint(x: -2.2, y: 2.2)))
+  }
+
+  @Test func arrowOutlineWidthScalesWithStrokeWithAFloor() {
+    #expect(ArrowPath.outlineWidth(width: 4) == 3)  // floor: 2 * 1.5
+    #expect(abs(ArrowPath.outlineWidth(width: 20) - 4.8) < 1e-9)  // 2 * 0.12 * 20
+  }
+
+  @Test func shortDoubleHeadedArrowOutlineDoesNotSelfIntersect() {
+    for length in [9.0, 15, 30, 60] {
+      for width in [4.0, 10, 20] {
+        let path = ArrowPath.make(from: .zero, to: CGPoint(x: length, y: 0), width: width, doubleHeaded: true)
+        var points = vertices(of: path)
+        if points.count > 1, points.first == points.last { points.removeLast() }
+        let count = points.count
+        #expect(count == 10)
+        for i in 0..<count {
+          for j in (i + 1)..<count {
+            // Edges i -> i+1 and j -> j+1; adjacent edges share a vertex and are skipped.
+            let adjacent = j == i + 1 || (i == 0 && j == count - 1)
+            if adjacent { continue }
+            let crossing = segmentsIntersect(
+              points[i], points[(i + 1) % count], points[j], points[(j + 1) % count])
+            #expect(!crossing, "length \(length) width \(width): edge \(i) crosses edge \(j)")
+          }
+        }
+      }
+    }
+  }
+
+  /// Proper (interior) intersection of segments p1-p2 and p3-p4.
+  private func segmentsIntersect(_ p1: CGPoint, _ p2: CGPoint, _ p3: CGPoint, _ p4: CGPoint) -> Bool {
+    func cross(_ a: CGPoint, _ b: CGPoint, _ c: CGPoint) -> Double {
+      (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x)
+    }
+    let d1 = cross(p3, p4, p1)
+    let d2 = cross(p3, p4, p2)
+    let d3 = cross(p1, p2, p3)
+    let d4 = cross(p1, p2, p4)
+    return d1 * d2 < -1e-9 && d3 * d4 < -1e-9
   }
 
   @Test func zeroLengthOrWidthArrowIsEmpty() {

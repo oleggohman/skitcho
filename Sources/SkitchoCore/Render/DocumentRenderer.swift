@@ -93,10 +93,19 @@ public enum DocumentRenderer {
       let path = ArrowPath.make(from: start, to: end, width: style.strokeWidth, doubleHeaded: doubleHeaded)
       guard !path.isEmpty else { return }
       context.saveGState()
+      // Outline and fill share one shadow: the shadow is cast by the transparency layer as a whole.
       applyShadow(in: context, scale: scale, enabled: shadows)
+      context.beginTransparencyLayer(auxiliaryInfo: nil)
+      context.setStrokeColor(CGColor(gray: 1, alpha: 1))
+      context.setLineWidth(ArrowPath.outlineWidth(width: style.strokeWidth))
+      context.setLineJoin(.round)
+      context.setLineCap(.round)
+      context.addPath(path)
+      context.strokePath()
       context.setFillColor(color)
       context.addPath(path)
       context.fillPath()
+      context.endTransparencyLayer()
       context.restoreGState()
 
     case .line(let start, let end):

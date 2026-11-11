@@ -124,6 +124,60 @@ func makeContext(width: Int, height: Int) -> CGContext {
     expectColor(output.pixel(40, 70), .white)
   }
 
+  private func outlinedArrow() -> Element {
+    Element(
+      kind: .arrow(start: CGPoint(x: 10, y: 40), end: CGPoint(x: 90, y: 40), doubleHeaded: false),
+      style: testStyle(.red, stroke: 8))
+  }
+
+  @Test func arrowHasWhiteOutlineAroundTheFill() throws {
+    // Stroke 8: shaft half-width at x = 40 is about 2.7 and the outline reaches about 4.2.
+    let context = makeContext(width: 100, height: 80)
+    DocumentRenderer.draw(document(elements: [outlinedArrow()], fill: .black), in: context, shadows: false)
+    let output = PixelReader(context.makeImage()!)
+    expectColor(output.pixel(40, 39), .red)
+    expectColor(output.pixel(40, 40), .red)
+    // Just outside the fill edge, on both sides, the outline is white against the black background.
+    for y in [36, 43] {
+      let pixel = output.pixel(40, y)
+      #expect(pixel.r > 240 && pixel.g > 240 && pixel.b > 240, "y \(y): \(pixel)")
+    }
+    expectColor(output.pixel(40, 30), .black)
+    expectColor(output.pixel(40, 50), .black)
+  }
+
+  @Test func arrowOutlineHasNoSpikePastTheTip() throws {
+    let context = makeContext(width: 100, height: 80)
+    DocumentRenderer.draw(document(elements: [outlinedArrow()], fill: .black), in: context, shadows: false)
+    let output = PixelReader(context.makeImage()!)
+    // The outline half-width is 1.5: right behind the tip it is white, further than that it is untouched.
+    let near = output.pixel(90, 40)
+    #expect(near.r > 200 && near.g > 200 && near.b > 200, "\(near)")
+    expectColor(output.pixel(93, 40), .black)
+    expectColor(output.pixel(95, 40), .black)
+  }
+
+  @Test func arrowCastsOneShadowWhenEnabled() throws {
+    let output = PixelReader(try DocumentRenderer.flatten(document(elements: [outlinedArrow()])))
+    // Below the arrow (y-down) the shadow darkens the white background; above it does not.
+    #expect(output.pixel(40, 46).r < 245)
+    #expect(output.pixel(40, 34).r > output.pixel(40, 46).r)
+    let context = makeContext(width: 100, height: 80)
+    DocumentRenderer.draw(document(elements: [outlinedArrow()]), in: context, shadows: false)
+    #expect(PixelReader(context.makeImage()!).pixel(40, 46).r >= 253)
+  }
+
+  @Test func arrowBoundsAndHitTestIncludeTheOutline() {
+    let arrow = outlinedArrow()
+    let fill = ArrowPath.make(from: CGPoint(x: 10, y: 40), to: CGPoint(x: 90, y: 40), width: 8).boundingBoxOfPath
+    let pad = ArrowPath.outlineWidth(width: 8) / 2
+    #expect(abs(arrow.baseBounds.maxX - (fill.maxX + pad)) < 1e-9)
+    #expect(abs(arrow.baseBounds.minY - (fill.minY - pad)) < 1e-9)
+    // Just outside the fill but inside the outline still hits.
+    #expect(arrow.hitTest(point: CGPoint(x: 91, y: 40), tolerance: 0))
+    #expect(!arrow.hitTest(point: CGPoint(x: 95, y: 40), tolerance: 0))
+  }
+
   @Test func freehandStrokeIsDrawn() throws {
     let stroke = Element(
       kind: .freehand(segments: [straight], highlighter: false), style: testStyle(.navy, stroke: 8))
