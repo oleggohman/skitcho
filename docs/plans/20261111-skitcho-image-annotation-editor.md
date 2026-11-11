@@ -257,11 +257,11 @@
 - Create: `Sources/SkitchoCore/Geometry/LowPassFilter.swift`, `BezierFitter.swift`
 - Create: `Tests/SkitchoCoreTests/BezierFitterTests.swift`
 
-- [ ] low-pass filter (α configurable, drops points within 0.5 doc units)
-- [ ] Schneider recursive cubic fit (Newton–Raphson reparameterization, corner detection) → `[BezierSegment]`
-- [ ] write tests: line → 1 segment, circle within tolerance, V corner kept
-- [ ] write tests for edge cases: 0/1/2 points, duplicates, no NaN
-- [ ] run tests. Must pass before task 6.
+- [x] low-pass filter (α configurable, drops points within 0.5 doc units)
+- [x] Schneider recursive cubic fit (Newton–Raphson reparameterization, corner detection) → `[BezierSegment]`
+- [x] write tests: line → 1 segment, circle within tolerance, V corner kept
+- [x] write tests for edge cases: 0/1/2 points, duplicates, no NaN
+- [x] run tests. Must pass before task 6.
 
 ### Task 6: Full document model and `.skitcho` codec
 
