@@ -50,7 +50,27 @@ Document space is top-left origin, y-down, in image pixels. The single flip to C
 - `editor` (`EditorModel`) is a `lazy var` created on the main actor by the view; the window view re-binds the
   `UndoManager` from the environment.
 - Core `Document` collides with `SwiftUI.Document`: files importing both add `import struct SkitchoCore.Document`.
-- Plain images are readable but not writable, so they open untitled-like and Save asks for a `.skitcho`.
+- Saving is split in two. `.skitcho` goes through `NSDocument` (`SkitchoDocument` writes only that type). A
+  flattened JPEG (`SaveFormat`, quality 0.9) is written by `SaveCoordinator` through an explicit command:
+  ⌘S overwrites an opened JPEG (or the target chosen by Save As) only on that command, and asks via the Save
+  panel (JPEG preselected, "Skitcho (editable)" as the alternative) for new pictures and other image types.
+  The File menu is the `FileMenuItem` table, rendered by `Commands.swift`.
+- **HARD rule:** never add a lossy image type (JPEG or similar) to `SkitchoDocument.writableContentTypes`.
+  SwiftUI hard-codes autosave-in-place for every writable type, which would silently overwrite the user's file
+  (pinned by `SaveFormatTests.swiftUIPlatformDocumentAutosavesInPlace`).
+
+### Fit mode
+
+`CanvasView.fitMode` (default on) makes the zoom follow the window and canvas size, capped at 100%. It is
+cleared only by the manual zoom methods (`zoomIn`, `zoomOut`, `actualSize`, pinch `magnify`) and set only by
+`zoomToFit`. Do not clear it anywhere else.
+
+### Esc routing
+
+`CanvasView.handleKey` lets the active tool controller handle Esc first (cancel the drag, crop, pixelate, ...),
+then switches to the Select tool and keeps the selection; on Select itself Esc clears the selection. While a
+text element is edited the key goes to `TextEditorOverlay`, whose `onEscape` callback (after the commit) returns
+focus to the canvas and switches to Select.
 
 ### Undo pattern
 

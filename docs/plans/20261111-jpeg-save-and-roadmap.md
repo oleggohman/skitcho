@@ -283,13 +283,13 @@ The maintainer is away and asked for autonomous execution. Decisions not settled
 - [x] manual GUI check deferred to the maintainer (`open` is blocked for agents) (deferred to maintainer — open is blocked for agents)
 
 ### Task 9: [Final] Update documentation
-- [ ] README:
+- [x] README:
   - save behaviour: JPEG default, the Skitcho option, an opened JPG is overwritten only on ⌘S, a reopened JPEG is flat, EXIF/GPS is dropped and colours are stored as sRGB, and `.skitcho` documents autosave
   - Esc in the shortcuts table
   - fit to window in the canvas table
   - the arrow drawing direction in Quick start
-- [ ] CLAUDE.md: replace line ~53 ("Plain images are readable but not writable…") with the new save design and the rule "never add a lossy image type to `writableContentTypes` (SwiftUI hard-codes autosave-in-place)"; add fit mode
-- [ ] move this plan to `docs/plans/completed/` (orchestrator, after reviews)
+- [x] CLAUDE.md: replace line ~53 ("Plain images are readable but not writable…") with the new save design and the rule "never add a lossy image type to `writableContentTypes` (SwiftUI hard-codes autosave-in-place)"; add fit mode
+- [x] move this plan to `docs/plans/completed/` (moved by orchestrator after reviews)
 
 ## Post-Completion
 *Items requiring manual intervention or external systems — no checkboxes, informational only*

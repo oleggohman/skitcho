@@ -20,7 +20,8 @@ It is a native SwiftUI/AppKit app, built for Apple silicon only (arm64).
 
 **Annotate**
 
-- Arrow, line, rectangle, rounded rectangle and ellipse.
+- Arrow, line, rectangle, rounded rectangle and ellipse. The arrow is bold with a white outline and a soft
+  shadow, so it reads on any background. It is drawn from the point it points at: the head is where you press.
 - Text, edited in place: outlined (readable on any background) or plain, with an adjustable wrap width.
 - Freehand marker and highlighter, smoothed into clean curves.
 - Stamps (approve, reject, question, attention, perfect) with an optional pointer tail and an attached
@@ -36,7 +37,7 @@ It is a native SwiftUI/AppKit app, built for Apple silicon only (arm64).
 **Work with files**
 
 - Open images, or start from a blank canvas, the clipboard (New from Clipboard) or a Dock drop.
-- Save an editable `.skitcho` package; the original image is never overwritten.
+- Save a flattened JPEG with ⌘S, or an editable `.skitcho` package (see [Saving](#saving)).
 - Export to PNG, JPEG (quality slider) or TIFF, optionally at Retina 2×.
 - Copy the flattened image to the clipboard, or drag the image out of the window.
 
@@ -63,10 +64,11 @@ before installing an update.
 
 1. Open an image with ⌘O, or press ⌥⌘N to start from the clipboard.
 2. Pick a tool from the palette or press its letter (for example `A` for Arrow, `R` for Rectangle).
-3. Drag on the canvas to draw. Adjust color and size in the properties panel.
+3. Drag on the canvas to draw. Adjust color and size in the properties panel. For an arrow, press on what
+   you want to point at and drag away: the head stays where you pressed.
 4. Switch to Select (`V`) to move, resize or delete annotations; ⌘Z undoes any step.
-5. Export with ⇧⌘E (PNG, JPEG or TIFF, optional Retina 2×), copy the result with ⇧⌘C, or save an
-   editable `.skitcho` document with ⌘S.
+5. Save the marked-up picture as a JPEG with ⌘S, export with ⇧⌘E (PNG, JPEG or TIFF, optional Retina 2×),
+   or copy the result with ⇧⌘C. To keep annotations editable, choose "Skitcho (editable)" when saving.
 
 ## Keyboard shortcuts
 
@@ -95,7 +97,10 @@ Command, Control and Option chords never switch tools.
 
 | Shortcut | Action |
 | --- | --- |
-| ⌘N / ⌘O / ⌘S | New / Open / Save |
+| ⌘N / ⌘O | New / Open |
+| ⌘S | Save |
+| ⇧⌘S | Save As… |
+| ⌘W | Close |
 | ⌥⌘N | New from Clipboard |
 | ⇧⌘E | Export As… |
 | ⇧⌘C | Copy Image |
@@ -107,6 +112,9 @@ Command, Control and Option chords never switch tools.
 | ⌘0 | Actual Size |
 | ⌘9 | Zoom to Fit |
 
+The File menu also has Duplicate (menu only, no shortcut) and, for a saved `.skitcho` document only,
+Revert to Saved, Rename… and Move To….
+
 The Image menu (Crop, Resize…, Rotate, Flip, Expand Canvas) has no keyboard shortcuts.
 
 ### Canvas
@@ -117,7 +125,27 @@ The Image menu (Crop, Resize…, Rotate, Flip, Expand Canvas) has no keyboard sh
 | Pinch (trackpad) | Zoom |
 | Arrow keys | Nudge the selection (hold Shift for ×10) |
 | Delete | Delete the selection |
-| Esc | Deselect, or cancel the current operation |
+| Esc | Cancel whatever is in progress and return to the Select tool (also from the text editor, which keeps the text); on Select, clear the selection |
+
+### Zoom
+
+A new window starts in fit mode: the picture follows the window and canvas size, never larger than 100%.
+Zooming by hand (⌘+, ⌘-, ⌘0 or pinch) leaves fit mode; ⌘9 Zoom to Fit re-enters it. The bottom bar shows
+"Fit · NN%" in fit mode and plain "NN%" otherwise.
+
+## Saving
+
+- **⌘S saves a flattened JPEG** (quality 90%) by default.
+- **An opened JPG** is overwritten in place only when you press ⌘S. It is never autosaved.
+- **A new picture or another image type** (PNG, HEIC, …) asks where to save, with JPEG preselected and
+  "Skitcho (editable)" as the alternative.
+- **Save As… (⇧⌘S)** always shows the panel with both formats. Saving a `.skitcho` document as JPEG writes a
+  copy; the document itself stays a `.skitcho`.
+- **`.skitcho` documents** keep annotations editable and are autosaved.
+- **A reopened JPEG is flat**: the annotations are part of the pixels and can no longer be edited.
+- **Saving a JPEG drops EXIF and GPS metadata** and stores the colors as sRGB.
+- ⚠️ If macOS does not provide the location of the opened file, ⌘S shows the save panel instead of
+  overwriting.
 
 ## File format
 
@@ -129,8 +157,7 @@ MyImage.skitcho/
   base.png        # the base image
 ```
 
-Plain images open as new untitled documents, and the first Save asks where to store a `.skitcho`.
-Plain images are never overwritten. A package written by a newer version of the app is rejected with
+A package written by a newer version of the app is rejected with
 an error instead of being misread.
 
 ## Build from source
