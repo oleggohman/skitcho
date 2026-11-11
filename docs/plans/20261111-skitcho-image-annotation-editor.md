@@ -244,12 +244,12 @@
 - Create: `Sources/SkitchoCore/Geometry/ArrowPath.swift`, `ShapePaths.swift`, `HitTest.swift`, `CGExtensions.swift`
 - Create: `Tests/SkitchoCoreTests/GeometryTests.swift`
 
-- [ ] `ArrowPath.make(from:to:width:doubleHeaded:) -> CGPath`: tapered shaft, head ≤ 0.4·L, minimum length 3·head
-- [ ] rect/rounded/ellipse/line paths with rotation about center
-- [ ] hit testing (tolerance in document units): stroked path, rect intersection, filled interior option
-- [ ] helpers: distance to segment, rotate about point, 15° snap
-- [ ] write tests: head cap, symmetry, zero length, hit inside/outside tolerance, snap
-- [ ] run tests. Must pass before task 5.
+- [x] `ArrowPath.make(from:to:width:doubleHeaded:) -> CGPath`: tapered shaft, head ≤ 0.4·L, minimum length 3·head
+- [x] rect/rounded/ellipse/line paths with rotation about center
+- [x] hit testing (tolerance in document units): stroked path, rect intersection, filled interior option
+- [x] helpers: distance to segment, rotate about point, 15° snap
+- [x] write tests: head cap, symmetry, zero length, hit inside/outside tolerance, snap
+- [x] run tests. Must pass before task 5.
 
 ### Task 5: Freehand smoothing and bezier fitting
 
