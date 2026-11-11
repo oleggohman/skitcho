@@ -63,6 +63,15 @@ import Testing
     #expect(double.contains(probe))
   }
 
+  @Test func shortWideArrowShaftIsNeverWiderThanItsHead() {
+    // Length 15 at width 20: the head is capped at 6 long, so its half-width is 3.6 (< 0.25 * width = 5).
+    for doubleHeaded in [false, true] {
+      let path = ArrowPath.make(from: .zero, to: CGPoint(x: 15, y: 0), width: 20, doubleHeaded: doubleHeaded)
+      let headHalf = ArrowPath.headLength(width: 20, length: 15) * 0.6
+      #expect(abs(path.boundingBoxOfPath.height - 2 * headHalf) < 1e-9, "\(path.boundingBoxOfPath)")
+    }
+  }
+
   @Test func zeroLengthOrWidthArrowIsEmpty() {
     #expect(ArrowPath.make(from: CGPoint(x: 5, y: 5), to: CGPoint(x: 5, y: 5), width: 10).isEmpty)
     #expect(ArrowPath.make(from: .zero, to: CGPoint(x: 50, y: 0), width: 0).isEmpty)

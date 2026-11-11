@@ -26,8 +26,10 @@ public enum ArrowPath {
 
     let head = headLength(width: width, length: length)
     let headHalf = head * 0.6
-    let tailHalf = max(width * 0.08, 1.5)
-    let baseHalf = max(width * 0.25, tailHalf)
+    // The shaft never gets wider than the head (short, wide arrows cap the head at a fraction of the length).
+    let nominalTail = max(width * 0.08, 1.5)
+    let baseHalf = min(max(width * 0.25, nominalTail), headHalf)
+    let tailHalf = min(nominalTail, baseHalf)
 
     // Local frame: x along the arrow from start to end, y perpendicular.
     var local: [CGPoint] = []

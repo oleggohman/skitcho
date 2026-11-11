@@ -68,13 +68,16 @@ public enum TextRenderer {
       framesetter(for: content, fontSize: style.fontSize), CFRange(location: 0, length: 0),
       CGPath(rect: CGRect(origin: .zero, size: size), transform: nil), nil)
 
+    // The text matrix is not part of the graphics state, so one left by earlier drawing would skew glyphs.
     if content.styled {
+      context.textMatrix = .identity
       context.setTextDrawingMode(.stroke)
       context.setStrokeColor(style.color.contrastingOutline.cgColor)
       context.setLineWidth(style.fontSize * outlineWidthRatio)
       context.setLineJoin(.round)
       CTFrameDraw(frame, context)
     }
+    context.textMatrix = .identity
     context.setTextDrawingMode(.fill)
     context.setFillColor(style.color.cgColor)
     CTFrameDraw(frame, context)

@@ -42,6 +42,27 @@ import Testing
     return CGRect(x: minX, y: minY, width: maxX - minX + 1, height: maxY - minY + 1)
   }
 
+  @Test func leftoverTextMatrixDoesNotAffectText() throws {
+    let element = Element(
+      kind: .text(TextContent(string: "Skew", origin: CGPoint(x: 10, y: 10), styled: true)), style: textStyle(.red))
+    let doc = Document(baseImage: makeBitmap(width: 200, height: 120, fill: .white), elements: [element])
+    func render(textMatrix: CGAffineTransform) -> PixelReader {
+      let context = makeContext(width: 200, height: 120)
+      // The text matrix is not saved with the graphics state, so earlier drawing on a shared context leaves it.
+      context.textMatrix = textMatrix
+      DocumentRenderer.draw(doc, in: context)
+      return PixelReader(context.makeImage()!)
+    }
+    let clean = render(textMatrix: .identity)
+    let dirty = render(textMatrix: CGAffineTransform(a: -1, b: 0, c: 0.5, d: 2, tx: 7, ty: 3))
+    var differing = 0
+    for y in 0..<clean.height {
+      for x in 0..<clean.width where clean.pixel(x, y) != dirty.pixel(x, y) { differing += 1 }
+    }
+    #expect(differing == 0)
+    #expect(inkBox(clean) != nil)
+  }
+
   // MARK: Measure
 
   @Test func measureGrowsWithStringAndLines() {
