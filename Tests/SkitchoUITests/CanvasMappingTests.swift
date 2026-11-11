@@ -129,10 +129,10 @@ import struct SkitchoCore.Document
     let (editor, _) = makeEditor()
     let canvas = CanvasView(editor: editor)
     #expect(canvas.activeController is SelectPanToolController)
-    editor.currentTool = .text
+    editor.currentTool = .stamp
     #expect(canvas.activeController is SelectPanToolController)
     let custom = controller(editor)
-    canvas.register(custom, for: .text)
+    canvas.register(custom, for: .stamp)
     #expect(canvas.activeController === custom)
   }
 

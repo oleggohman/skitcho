@@ -421,10 +421,10 @@
 - Create: `Sources/SkitchoUI/Canvas/TextToolController.swift`, `TextEditorOverlay.swift`
 - Create: `Tests/SkitchoUITests/TextToolTests.swift`
 
-- [ ] the controller state machine (idle → editing(id) → committed) is separate from the NSTextView overlay. A click creates text and opens the overlay matched to zoom; double-click edits existing text
-- [ ] `commit(text:)`: empty → removed with no undo entry; non-empty → one undo step; wrap-width handle; type-to-create
-- [ ] write tests (state machine, no first responder): create→commit, empty removal, edit is one undo step, type-to-create seeds the first character
-- [ ] run tests. Must pass before task 20.
+- [x] the controller state machine (idle → editing(id) → committed) is separate from the NSTextView overlay. A click creates text and opens the overlay matched to zoom; double-click edits existing text
+- [x] `commit(text:)`: empty → removed with no undo entry; non-empty → one undo step; wrap-width handle; type-to-create
+- [x] write tests (state machine, no first responder): create→commit, empty removal, edit is one undo step, type-to-create seeds the first character
+- [x] run tests. Must pass before task 20.
 
 ### Task 20: Stamp tool
 

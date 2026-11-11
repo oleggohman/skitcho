@@ -8,6 +8,8 @@ enum Handle: Hashable, Sendable {
   case rotate
   /// Arrow and line endpoints.
   case start, end
+  /// Text only: drags the right edge to set the wrap width.
+  case wrapWidth
 
   /// Which sides move for a resize handle: -1 = min edge, +1 = max edge, 0 = that axis is untouched.
   fileprivate var direction: (x: Int, y: Int)? {
@@ -20,7 +22,7 @@ enum Handle: Hashable, Sendable {
     case .bottomLeft: (-1, 1)
     case .bottom: (0, 1)
     case .bottomRight: (1, 1)
-    case .rotate, .start, .end: nil
+    case .rotate, .start, .end, .wrapWidth: nil
     }
   }
 }
@@ -39,6 +41,8 @@ enum HandleLayout {
   static let rotateOffset: Double = 24
   /// Smallest side a resize can produce, in document units.
   static let minimumSide: Double = 1
+  /// Smallest wrap width, as a multiple of the font size.
+  static let minimumWrapWidth: Double = 2
 
   private static let corners: [Handle] = [.topLeft, .topRight, .bottomLeft, .bottomRight]
   private static let allEight: [Handle] = [
@@ -50,7 +54,8 @@ enum HandleLayout {
     switch element.kind {
     case .arrow, .line: [.start, .end]
     case .rect, .ellipse: allEight + [.rotate]
-    case .text, .stamp: corners + [.rotate]
+    case .text: corners + [.rotate, .wrapWidth]
+    case .stamp: corners + [.rotate]
     case .freehand: allEight
     }
   }
@@ -69,6 +74,9 @@ enum HandleLayout {
       case .arrow(let start, let end, _), .line(let start, let end): return handle == .start ? start : end
       default: return nil
       }
+    case .wrapWidth:
+      let base = element.baseBounds
+      return GeometryMath.rotate(CGPoint(x: base.maxX, y: base.midY), about: base.center, by: element.rotation)
     case .rotate:
       let base = element.baseBounds
       let local = CGPoint(x: base.midX, y: base.minY - rotateOffset / max(zoom, 0.0001))
@@ -96,6 +104,7 @@ enum HandleLayout {
   static func undoName(for handle: Handle) -> String {
     switch handle {
     case .rotate: "Rotate"
+    case .wrapWidth: "Change Text Width"
     case .start, .end: "Move Endpoint"
     default: "Resize"
     }
@@ -111,6 +120,7 @@ enum HandleLayout {
     switch handle {
     case .start, .end: return moveEndpoint(handle, of: original, to: pointer, modifiers: modifiers)
     case .rotate: return rotate(original, pointer: pointer, modifiers: modifiers)
+    case .wrapWidth: return setWrapWidth(of: original, pointer: pointer)
     default: return resize(handle, of: original, pointer: pointer, modifiers: modifiers)
     }
   }
@@ -145,6 +155,19 @@ enum HandleLayout {
     if modifiers.contains(.shift) { angle = GeometryMath.snapAngle(angle) }
     element.rotation = normalized(angle)
     return element
+  }
+
+  /// Sets the wrap width of a text element so its right edge follows `pointer`; the left edge stays put on
+  /// screen even when the element is rotated. Other kinds are returned unchanged.
+  private static func setWrapWidth(of original: Element, pointer: CGPoint) -> Element {
+    guard case .text(var content) = original.kind else { return original }
+    let base = original.baseBounds
+    let local = GeometryMath.rotate(pointer, about: base.center, by: -original.rotation)
+    content.wrapWidth = max(local.x - base.minX, minimumWrapWidth * original.style.fontSize)
+    var element = original
+    element.kind = .text(content)
+    let worldCenter = GeometryMath.rotate(element.baseBounds.center, about: base.center, by: original.rotation)
+    return element.translated(by: worldCenter - element.baseBounds.center)
   }
 
   /// Wraps an angle into (-pi, pi].

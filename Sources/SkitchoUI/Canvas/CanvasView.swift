@@ -44,6 +44,9 @@ public final class CanvasView: NSView {
 
   private var controllers: [Tool: any ToolController] = [:]
   private let selectController: SelectPanToolController
+  private var textController: TextToolController?
+  /// The NSTextView shown over the canvas while a text element is edited.
+  private(set) var textOverlay: TextEditorOverlay?
   private var spaceDown = false
   private var panLast: CGPoint?
   private var lastCanvasSize: CGSize
@@ -64,6 +67,10 @@ public final class CanvasView: NSView {
     for tool in FreehandToolController.supportedTools {
       register(FreehandToolController(editor: editor, tool: tool, zoom: { box.value }), for: tool)
     }
+    let text = TextToolController(editor: editor, zoom: { box.value })
+    text.editingDidChange = { [weak self] in self?.syncTextOverlay() }
+    textController = text
+    register(text, for: .text)
     updateFrameSize()
     observeEditor()
   }
@@ -117,6 +124,7 @@ public final class CanvasView: NSView {
       width: max(canvas.width * zoom + 2 * Self.margin, viewport.width),
       height: max(canvas.height * zoom + 2 * Self.margin, viewport.height))
     if frame.size != size { setFrameSize(size) }
+    layoutTextOverlay()
     needsDisplay = true
   }
 
@@ -162,14 +170,54 @@ public final class CanvasView: NSView {
     }
   }
 
-  private func editorDidChange() {
+  func editorDidChange() {
     let size = editor.document.canvasSize
     if size != lastCanvasSize {
       lastCanvasSize = size
       updateFrameSize()
     }
+    if editor.currentTool != .text, let textController, textController.isEditing { textController.commit() }
     needsDisplay = true
     window?.invalidateCursorRects(for: self)
+  }
+
+  // MARK: Text editing overlay
+
+  /// Creates, updates or removes the in-place text editor to match the text controller's session.
+  private func syncTextOverlay() {
+    guard let session = textController?.session else {
+      removeTextOverlay()
+      return
+    }
+    if textOverlay?.sessionID != session.id {
+      removeTextOverlay()
+      let overlay = TextEditorOverlay(sessionID: session.id, string: session.string)
+      overlay.onTextChange = { [weak self] string in self?.textController?.update(text: string) }
+      overlay.onCommit = { [weak self] string in self?.textController?.commit(text: string) }
+      addSubview(overlay)
+      textOverlay = overlay
+      layoutTextOverlay()
+      window?.makeFirstResponder(overlay)
+      overlay.setSelectedRange(NSRange(location: (overlay.string as NSString).length, length: 0))
+    }
+    layoutTextOverlay()
+    needsDisplay = true
+  }
+
+  private func removeTextOverlay() {
+    guard let overlay = textOverlay else { return }
+    textOverlay = nil
+    // Detach first: removing the first responder triggers resignFirstResponder, which must not commit again.
+    overlay.onCommit = nil
+    overlay.onTextChange = nil
+    overlay.removeFromSuperview()
+    window?.makeFirstResponder(self)
+  }
+
+  /// Matches the overlay to the edited element at the current zoom.
+  private func layoutTextOverlay() {
+    guard let overlay = textOverlay, let session = textController?.session else { return }
+    overlay.apply(session: session, geometry: canvasGeometry)
   }
 
   // MARK: Drawing
@@ -221,13 +269,20 @@ public final class CanvasView: NSView {
   }
 
   public override func mouseDown(with event: NSEvent) {
+    // A press on the canvas while text is being edited only ends the edit.
+    if let textController, textController.isEditing {
+      textController.commit()
+      window?.makeFirstResponder(self)
+      return
+    }
     window?.makeFirstResponder(self)
     if spaceDown {
       panLast = event.locationInWindow
       window?.invalidateCursorRects(for: self)
       return
     }
-    activeController.mouseDown(at: docPoint(event), modifiers: ToolModifiers(event.modifierFlags))
+    activeController.mouseDown(
+      at: docPoint(event), modifiers: ToolModifiers(event.modifierFlags), clickCount: event.clickCount)
   }
 
   public override func mouseDragged(with event: NSEvent) {
@@ -288,7 +343,9 @@ public final class CanvasView: NSView {
     case 125: return .arrow(dx: 0, dy: 1)
     case 126: return .arrow(dx: 0, dy: -1)
     default:
-      guard let first = event.charactersIgnoringModifiers?.first else { return nil }
+      // Shortcuts use the bare key; plain typing keeps the shifted character for type-to-create.
+      let command = !event.modifierFlags.intersection([.command, .control]).isEmpty
+      guard let first = (command ? event.charactersIgnoringModifiers : event.characters)?.first else { return nil }
       return .character(first)
     }
   }

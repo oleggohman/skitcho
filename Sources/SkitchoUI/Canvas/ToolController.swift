@@ -40,6 +40,8 @@ public protocol ToolController: AnyObject {
   var needsDisplay: (() -> Void)? { get set }
 
   func mouseDown(at point: CGPoint, modifiers: ToolModifiers)
+  /// Like `mouseDown(at:modifiers:)` with the event's click count (2 = double-click). Defaults to a plain press.
+  func mouseDown(at point: CGPoint, modifiers: ToolModifiers, clickCount: Int)
   func mouseDragged(to point: CGPoint, modifiers: ToolModifiers)
   func mouseUp(at point: CGPoint, modifiers: ToolModifiers)
   /// Returns true when the key was consumed.
@@ -47,4 +49,10 @@ public protocol ToolController: AnyObject {
   /// Draws transient UI (selection handles, marquee, previews). `context` is in document space (y-down,
   /// 1 unit = 1 image pixel); `zoom` converts view points to document units (`points / zoom`).
   func overlay(in context: CGContext, zoom: Double)
+}
+
+extension ToolController {
+  public func mouseDown(at point: CGPoint, modifiers: ToolModifiers, clickCount: Int) {
+    mouseDown(at: point, modifiers: modifiers)
+  }
 }
