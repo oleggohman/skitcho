@@ -375,12 +375,12 @@
 - Create: `Sources/SkitchoUI/Canvas/CanvasView.swift`, `ToolController.swift`, `SelectPanToolController.swift`, `Cursors.swift`
 - Create: `Tests/SkitchoUITests/CanvasMappingTests.swift`
 
-- [ ] `CanvasView` (flipped, in NSScrollView): renders via `DocumentRenderer`, themed surround, zoom fit/in/out/actual/pinch, Space-drag pan; converts NSEvents to doc points and forwards them to the active controller
-- [ ] `ToolController` protocol: `mouseDown/Dragged/Up(at: CGPoint, modifiers:)`, `keyDown`, `cursor`, `overlay(in:)`
-- [ ] V tool: click select, drag move (interactive commit), marquee
-- [ ] SF Symbol cursors per tool
-- [ ] write tests: view↔doc mapping round-trips at zoom 0.25/1/3, V tool click selects top-most, drag moves with one undo step, marquee selects contained elements
-- [ ] run tests. Must pass before task 16.
+- [x] `CanvasView` (flipped, in NSScrollView): renders via `DocumentRenderer`, themed surround, zoom fit/in/out/actual/pinch, Space-drag pan; converts NSEvents to doc points and forwards them to the active controller
+- [x] `ToolController` protocol: `mouseDown/Dragged/Up(at: CGPoint, modifiers:)`, `keyDown`, `cursor`, `overlay(in:)`
+- [x] V tool: click select, drag move (interactive commit), marquee
+- [x] SF Symbol cursors per tool
+- [x] write tests: view↔doc mapping round-trips at zoom 0.25/1/3, V tool click selects top-most, drag moves with one undo step, marquee selects contained elements
+- [x] run tests. Must pass before task 16.
 
 ### Task 16: Shape tools — arrow, line, rect, rounded rect, ellipse
 
