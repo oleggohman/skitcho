@@ -1,7 +1,8 @@
 # Releasing Skitcho
 
 Releases are built, signed, notarized and published by `.github/workflows/release.yml`
-when a `v*` tag is pushed. Each release ships `Skitcho-X.Y.Z.dmg` (a compressed disk image with
+when a `v*` tag is pushed; only the first release is built and published by hand (see
+[The first release](#the-first-release)). Each release ships `Skitcho-X.Y.Z.dmg` (a compressed disk image with
 `Skitcho.app` and an `Applications` link for drag-to-install) and `appcast.xml`. This page describes
 the one-time maintainer setup and the per-release flow. No secret value ever belongs in the repository.
 
@@ -126,14 +127,64 @@ Releases run one at a time (a `concurrency` group), and the job times out after 
 GitHub answers 404 for `releases/latest/download/appcast.xml` both when no release exists and when the
 latest release has no `appcast.xml` asset (a manual release, a deleted asset). Treating the second case as
 "no feed" would drop every older item and skip the version guards, so `scripts/release.sh` only accepts a
-404 with an explicit `FIRST_RELEASE=1`, and refuses `FIRST_RELEASE=1` when a feed is published. Set it
-only for the very first release (and never in the workflow):
+404 with an explicit `FIRST_RELEASE=1`, and refuses `FIRST_RELEASE=1` when a feed is published. The
+workflow never sets it, so a tag run cannot publish the first release. `v0.1.0` is built locally on the
+maintainer's Mac and published with `gh`:
 
-```bash
-FIRST_RELEASE=1 scripts/release.sh 0.1.0
-```
+1. Merge the release to `main`, then create and push the tag (only admins may, see the tag ruleset):
 
-If a later release fails with "returned 404", restore `appcast.xml` on the latest release instead.
+   ```bash
+   git checkout main && git pull
+   git tag v0.1.0
+   git push origin v0.1.0
+   ```
+
+   The push starts the release workflow, which waits for approval of the `release` environment.
+   **Reject** that deployment: without a feed it would stop at the 404 anyway.
+2. Build from the tagged commit with a full clone (the build number is the commit count):
+
+   ```bash
+   git checkout --detach v0.1.0
+   git status --porcelain   # must print nothing
+   ```
+
+   Set the same inputs the workflow gives `scripts/release.sh`, from your local `apple-signer`
+   environment and the Sparkle key in your Keychain (step 1 of the setup):
+
+   | Variable | Content |
+   | --- | --- |
+   | `SIGN_IDENTITY` | the `AppleIDENTITY` value; the certificate must be in your keychain search list |
+   | `ASC_KEY_PATH` | path of the App Store Connect `AuthKey_XXXX.p8` file (outside the repository) |
+   | `AppleStoreAPIKey`, `AppleIssuerID` | App Store Connect key ID and issuer ID |
+   | `SPARKLE_PUBLIC_ED_KEY` | the repository variable of the same name |
+   | `SPARKLE_ED_PRIVATE_KEY` | the private key, read from a private temporary export as in setup step 1 |
+
+   Then run the release once with `FIRST_RELEASE=1`. It builds, signs, notarizes and staples the DMG
+   and writes `dist/Skitcho-0.1.0.dmg` and a new `dist/appcast.xml`; it does not publish anything:
+
+   ```bash
+   FIRST_RELEASE=1 scripts/release.sh 0.1.0
+   ```
+
+3. Publish the release with both assets, marked as latest:
+
+   ```bash
+   gh release create v0.1.0 dist/Skitcho-0.1.0.dmg dist/appcast.xml \
+     --repo oleggohman/skitcho --verify-tag --latest --title "Skitcho 0.1.0" --generate-notes
+   ```
+
+4. Check that the feed is published (expected output: `200`):
+
+   ```bash
+   curl -sSL -o /dev/null -w '%{http_code}\n' \
+     https://github.com/oleggohman/skitcho/releases/latest/download/appcast.xml
+   ```
+
+5. Return to `main` (`git checkout main`) and unset the variables.
+
+Every later release uses the tag workflow (see [Releasing](#releasing)), which requires this feed to exist.
+Never set `FIRST_RELEASE` again. If a later release fails with "returned 404", restore `appcast.xml` on
+the latest release instead.
 
 ## Verifying a release
 
