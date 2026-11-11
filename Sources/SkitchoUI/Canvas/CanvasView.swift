@@ -48,6 +48,7 @@ public final class CanvasView: NSView {
   private var controllers: [Tool: any ToolController] = [:]
   private let selectController: SelectPanToolController
   private var textController: TextToolController?
+  private var stampController: StampToolController?
   private var pixelateController: PixelateToolController?
   /// Options bar (block size, Apply/Cancel) shown below a pending pixelate region.
   private(set) var pixelateBar: NSHostingView<PixelateBar>?
@@ -80,7 +81,9 @@ public final class CanvasView: NSView {
     text.editingDidChange = { [weak self] in self?.syncTextOverlay() }
     textController = text
     register(text, for: .text)
-    register(StampToolController(editor: editor, zoom: { box.value }, labelEditor: text), for: .stamp)
+    let stamp = StampToolController(editor: editor, zoom: { box.value }, labelEditor: text)
+    stampController = stamp
+    register(stamp, for: .stamp)
     let pixelate = PixelateToolController(editor: editor, zoom: { box.value })
     pixelate.stateDidChange = { [weak self] in self?.syncPixelateBar() }
     pixelateController = pixelate
@@ -118,6 +121,12 @@ public final class CanvasView: NSView {
   public func unregister(_ tool: Tool) {
     controllers[tool] = nil
     window?.invalidateCursorRects(for: self)
+  }
+
+  /// Starts a label on the stamp `id` (the properties panel's "Attach Label"); false when not possible.
+  @discardableResult
+  public func attachLabel(to id: UUID) -> Bool {
+    stampController?.attachLabel(to: id) ?? false
   }
 
   public var activeController: any ToolController { controllers[editor.currentTool] ?? selectController }

@@ -267,7 +267,7 @@ public final class EditorModel {
   }
 
   /// The style family used to recompute an element's frozen sizes.
-  private static func styleTool(of element: Element) -> StyleTool {
+  public static func styleTool(of element: Element) -> StyleTool {
     switch element.kind {
     case .arrow: .arrow
     case .line: .line

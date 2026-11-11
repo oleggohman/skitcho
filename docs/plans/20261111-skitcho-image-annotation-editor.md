@@ -487,10 +487,10 @@
 - Create: `Sources/SkitchoUI/Panels/ToolPalette.swift`, `PropertiesPanel.swift`
 - Create: `Tests/SkitchoUITests/PanelTests.swift`
 
-- [ ] palette: `darkBlue` sidebar, SF Symbol buttons, selected tool `blue`, hover `purple`, sub-tools (shape kinds, stamp kinds) in a plain popover (no pinning)
-- [ ] properties: annotation swatches + custom `ColorPicker`, 5 size dots, text styled/plain toggle, arrow double-head toggle
-- [ ] write tests: tapping a palette item sets `currentTool`; swatch/size/toggles call the right editor commands (view-model level, not pixels)
-- [ ] run tests. Must pass before task 26.
+- [x] palette: `darkBlue` sidebar, SF Symbol buttons, selected tool `blue`, hover `purple`, sub-tools (shape kinds, stamp kinds) in a plain popover (no pinning)
+- [x] properties: annotation swatches + custom `ColorPicker`, 5 size dots, text styled/plain toggle, arrow double-head toggle
+- [x] write tests: tapping a palette item sets `currentTool`; swatch/size/toggles call the right editor commands (view-model level, not pixels)
+- [x] run tests. Must pass before task 26.
 
 ### Task 26: Menus, commands, new-document sources, pasteboard bridge
 

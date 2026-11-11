@@ -21,6 +21,8 @@ public final class CanvasHandle {
   public func zoomOut() { canvas?.zoomOut() }
   public func actualSize() { canvas?.actualSize() }
   public func zoomToFit() { canvas?.zoomToFit() }
+  @discardableResult
+  public func attachLabel(to id: UUID) -> Bool { canvas?.attachLabel(to: id) ?? false }
 }
 
 /// Hosts the scrollable `CanvasView` inside SwiftUI.
@@ -39,47 +41,30 @@ struct CanvasHost: NSViewRepresentable {
   func updateNSView(_ nsView: NSScrollView, context: Context) {}
 }
 
-/// A clearly marked region reserved for a later task (tool palette, properties panel).
-struct PlaceholderRegion: View {
-  let title: String
-  let systemImage: String
-  var onDark = false
-
-  var body: some View {
-    let tint = onDark ? BrandColor.lightGray : BrandColor.mediumGray
-    VStack(spacing: Spacing.xxs) {
-      Image(systemName: systemImage)
-        .font(Typography.body.font())
-      Text(title)
-        .font(Typography.caption.font(weight: .medium))
-        .multilineTextAlignment(.center)
-    }
-    .foregroundStyle(tint.color)
-    .frame(maxWidth: .infinity, maxHeight: .infinity)
-    .padding(Spacing.xs)
-    .overlay {
-      RoundedRectangle(cornerRadius: Radius.medium, style: .continuous)
-        .strokeBorder(tint.color.opacity(0.6), style: StrokeStyle(lineWidth: 1, dash: [4, 3]))
-    }
-    .accessibilityElement(children: .ignore)
-    .accessibilityLabel("\(title) placeholder")
-  }
-}
-
 /// The document window: tool palette (left), canvas (center, rounded surround), properties (right) and a
-/// bottom bar with zoom and the resize panel. The palette and properties contents are placeholders until the
-/// panels land.
+/// bottom bar with zoom and the resize panel.
 public struct EditorWindowView: View {
   public static let sidebarWidth: CGFloat = Spacing.xxxl
   public static let propertiesWidth: CGFloat = 208
 
   private let editor: EditorModel
   @Environment(\.undoManager) private var undoManager
-  @State private var handle = CanvasHandle()
+  @State private var handle: CanvasHandle
   @State private var resize: ResizeModel?
+  @State private var palette: ToolPaletteModel
+  @State private var properties: PropertiesModel
 
   public init(document: SkitchoDocument) {
     self.editor = document.editor
+    let handle = CanvasHandle()
+    _handle = State(initialValue: handle)
+    _palette = State(initialValue: ToolPaletteModel(editor: document.editor))
+    _properties = State(
+      initialValue: PropertiesModel(
+        editor: document.editor,
+        attachLabel: { [weak handle] in
+          handle?.attachLabel(to: $0) ?? false
+        }))
   }
 
   /// Gives the editor the window's undo manager, so registrations dirty the document.
@@ -90,8 +75,7 @@ public struct EditorWindowView: View {
 
   public var body: some View {
     HStack(spacing: 0) {
-      PlaceholderRegion(title: "Tools", systemImage: "wrench.and.screwdriver", onDark: true)
-        .padding(Spacing.xs)
+      ToolPalette(model: palette)
         .frame(width: Self.sidebarWidth)
         .frame(maxHeight: .infinity)
         .background(BrandSemantic.sidebar.color)
@@ -101,7 +85,7 @@ public struct EditorWindowView: View {
             .background(BrandSemantic.canvasSurround.color)
             .clipShape(RoundedRectangle(cornerRadius: Radius.large, style: .continuous))
             .frame(minWidth: 320, minHeight: 240)
-          PlaceholderRegion(title: "Properties", systemImage: "slider.horizontal.3")
+          PropertiesPanel(model: properties)
             .frame(width: Self.propertiesWidth)
         }
         bottomBar
