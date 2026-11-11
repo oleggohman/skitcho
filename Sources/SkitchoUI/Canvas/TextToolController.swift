@@ -28,7 +28,7 @@ public struct TextEditSession: Equatable, Sendable {
 /// `TextEditorOverlay` for `session` and feeds `update(text:)` / `commit(text:)` back. While editing, the
 /// element sits in the document with an empty string (the overlay draws the text) inside an interactive
 /// gesture, so a commit registers exactly one undo step and an empty result registers none for new text.
-/// A save during the edit adds one step up to the saved state (see `documentForSaving()`).
+/// A save during the edit adds one step up to the saved state (see `checkpointSavedEdit(_:)`).
 @MainActor
 public final class TextToolController: ToolController {
   public static let supportedTools: [Tool] = [.text]
@@ -114,7 +114,7 @@ public final class TextToolController: ToolController {
   /// Ends the edit with `text`. Empty (or whitespace-only) text removes the element: a new element leaves no
   /// undo entry, an existing one is deleted as one undo step. Otherwise exactly one undo step is registered
   /// ("Add Text" or "Edit Text"; none when an existing text is unchanged) and the element is selected.
-  /// A save during the edit moved the gesture start to the saved state (see `documentForSaving()`), so the
+  /// A save during the edit moved the gesture start to the saved state (see `checkpointSavedEdit(_:)`), so the
   /// step then runs from that state; a saved new text that is emptied is deleted as one step.
   public func commit(text: String) {
     guard var current = session else { return }
@@ -144,7 +144,7 @@ public final class TextToolController: ToolController {
     changed()
   }
 
-  /// `documentCommittingEdit`, put on the undo stack when it differs from the gesture start.
+  /// Puts `saved` (a document a save served while an edit was running) on the undo stack as one step.
   ///
   /// A save writes a state the undo stack must hold, or undoing past it would return the change count to
   /// the save while the file differs from the screen. So one step from the gesture start to the saved state
@@ -152,16 +152,13 @@ public final class TextToolController: ToolController {
   /// compare against what was saved, and undo and redo pass through it. An unchanged edit, or an empty new
   /// text, equals the start and registers nothing.
   ///
-  /// `ReferenceFileDocument` calls `snapshot` (and so this) during the save, and SwiftUI owns the change
-  /// count, so the tests assert the undo stack and the document states. If the save records its change count
-  /// before this step is counted (a plain `NSDocument` that registers while writing behaves so), the document
-  /// stays edited after the save; the next save or autosave, with no new step, then marks it clean.
-  public func documentForSaving() -> Document {
-    let document = documentCommittingEdit
-    if let session, editor.isInteracting {
-      editor.checkpointInteractive(document, name: Self.stepName(for: session))
-    }
-    return document
+  /// `SkitchoDocument.snapshot` runs off the main actor and cannot register this itself, so it schedules this
+  /// call on the main actor afterwards. It does nothing when the edit ended meanwhile or the document moved
+  /// on (the next save serves the newer state). SwiftUI owns the change count, so the document may stay
+  /// edited after the save; the next save or autosave, with no new step, then marks it clean.
+  public func checkpointSavedEdit(_ saved: Document) {
+    guard let session, editor.isInteracting, documentCommittingEdit == saved else { return }
+    editor.checkpointInteractive(saved, name: Self.stepName(for: session))
   }
 
   /// The undo name of the step that ending `session` now would register.

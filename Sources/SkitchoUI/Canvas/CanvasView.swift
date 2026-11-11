@@ -83,7 +83,10 @@ public final class CanvasView: NSView {
       register(FreehandToolController(editor: editor, tool: tool, zoom: { box.value }), for: tool)
     }
     let text = TextToolController(editor: editor, zoom: { box.value })
-    text.editingDidChange = { [weak self] in self?.syncTextOverlay() }
+    text.editingDidChange = { [weak self] in
+      self?.syncTextOverlay()
+      self?.onSavableDocumentChange?()
+    }
     textController = text
     register(text, for: .text)
     let stamp = StampToolController(editor: editor, zoom: { box.value }, labelEditor: text)
@@ -495,8 +498,13 @@ public final class CanvasView: NSView {
   public var isEditingText: Bool { textController?.isEditing ?? false }
 
   /// The document to save: like `editor.document`, but with a running text edit's live string in place.
-  /// When it differs from the edit's start, the text controller puts it on the undo stack as one step.
-  public var savableDocument: Document { textController?.documentForSaving() ?? editor.document }
+  public var savableDocument: Document { textController?.documentCommittingEdit ?? editor.document }
+
+  /// Puts a document a save served during a text edit on the undo stack (see `TextToolController.checkpointSavedEdit`).
+  public func checkpointSavedEdit(_ saved: Document) { textController?.checkpointSavedEdit(saved) }
+
+  /// Called whenever the text edit starts, changes (every keystroke) or ends: the savable document may differ.
+  public var onSavableDocumentChange: (() -> Void)?
 
   /// Routes a key press: a tool shortcut switches the tool when `ToolShortcutRouter` allows it, otherwise the
   /// active controller gets the key (type-to-create, delete, arrows, Escape). Returns true when consumed.

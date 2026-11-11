@@ -10,6 +10,9 @@ public final class CanvasHandle {
   public private(set) weak var canvas: CanvasView?
   /// Runs before the canvas handles a mouse press or key (the window ends pending panel gestures here).
   public var willHandleCanvasInput: (() -> Void)?
+  /// Called when the canvas' savable document may have changed (text edit started, typed into, ended) and
+  /// right after a canvas attaches.
+  var onSavableDocumentChange: (() -> Void)?
 
   public init() {}
 
@@ -18,6 +21,8 @@ public final class CanvasHandle {
     zoom = canvas.zoom
     canvas.onZoomChange = { [weak self] value in self?.zoom = value }
     canvas.willHandleInput = { [weak self] in self?.willHandleCanvasInput?() }
+    canvas.onSavableDocumentChange = { [weak self] in self?.onSavableDocumentChange?() }
+    onSavableDocumentChange?()
   }
 
   public func zoomIn() { canvas?.zoomIn() }

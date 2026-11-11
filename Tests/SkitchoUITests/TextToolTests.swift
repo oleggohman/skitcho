@@ -359,11 +359,14 @@ import struct SkitchoCore.Document
     /// Saves outside any undo group: a registration would raise (the manager does not group by event).
     func save() throws -> Document { try document.snapshot(contentType: .skitchoDocument) }
 
-    /// Saves inside one undo group, as the app does.
-    func saveStep() throws -> Document {
+    /// Saves inside one undo group, as the app does, and lets the checkpoint that `snapshot` schedules on the
+    /// main actor run inside that group.
+    func saveStep() async throws -> Document {
       manager.beginUndoGrouping()
       defer { manager.endUndoGrouping() }
-      return try save()
+      let saved = try save()
+      for _ in 0..<3 { await Task.yield() }
+      return saved
     }
   }
 
@@ -382,7 +385,7 @@ import struct SkitchoCore.Document
   }
 
   /// A save while text is edited writes the live string (not the blank placeholder) and keeps the edit open.
-  @Test func snapshotDuringEditContainsTheLiveText() throws {
+  @Test func snapshotDuringEditContainsTheLiveText() async throws {
     let element = textElement("Hello")
     let f = try makeSaveFixture([element])
     #expect(f.controller.beginEditing(element.id))
@@ -392,7 +395,7 @@ import struct SkitchoCore.Document
     #expect(!f.manager.canUndo)
 
     f.controller.update(text: "Hello world")
-    let saved = try f.saveStep()
+    let saved = try await f.saveStep()
     #expect(string(of: saved.elements[0]) == "Hello world")
     #expect(f.manager.undoActionName == "Edit Text")
     // The edit goes on uninterrupted: same session, element still hidden behind the overlay.
@@ -403,7 +406,7 @@ import struct SkitchoCore.Document
 
     // Emptied text would be deleted by the commit, so it is not saved either; that save is a delete step.
     f.controller.update(text: "  ")
-    let savedEmpty = try f.saveStep()
+    let savedEmpty = try await f.saveStep()
     #expect(savedEmpty.elements.isEmpty)
     #expect(f.manager.undoActionName == "Delete Text")
     // Retyping the start text brings the element back as one more step; undo walks through every save.
@@ -421,12 +424,12 @@ import struct SkitchoCore.Document
   }
 
   /// Saved mid-edit, then committed with the saved text: the save's step is the only one.
-  @Test func saveMidEditThenUnchangedCommitAddsNoStep() throws {
+  @Test func saveMidEditThenUnchangedCommitAddsNoStep() async throws {
     let element = textElement("A")
     let f = try makeSaveFixture([element])
     #expect(f.controller.beginEditing(element.id))
     f.controller.update(text: "B")
-    let saved = try f.saveStep()
+    let saved = try await f.saveStep()
     // No group is open: a second step would raise.
     f.controller.commit()
     #expect(f.editor.document == saved)
@@ -438,7 +441,7 @@ import struct SkitchoCore.Document
   }
 
   /// Saved as B mid-edit, continued to C and committed: undo goes C, B, A and redo goes back A, B, C.
-  @Test func saveMidEditThenContinueUndoesThroughTheSavedState() throws {
+  @Test func saveMidEditThenContinueUndoesThroughTheSavedState() async throws {
     for isNew in [false, true] {
       let element = textElement("A")
       let f = try makeSaveFixture(isNew ? [] : [element])
@@ -450,7 +453,7 @@ import struct SkitchoCore.Document
       let start = f.document.initial
       let name = isNew ? "Add Text" : "Edit Text"
       f.controller.update(text: "B")
-      let saved = try f.saveStep()
+      let saved = try await f.saveStep()
       #expect(f.manager.undoActionName == name)
       f.controller.update(text: "C")
       grouped(f.manager) { f.controller.commit() }
@@ -473,7 +476,7 @@ import struct SkitchoCore.Document
 
   /// Saved mid-edit, then cancelled: the document returns to the saved state (the file and the screen
   /// agree), and the save's step still leads back to the start.
-  @Test func saveMidEditThenCancelKeepsTheSavedState() throws {
+  @Test func saveMidEditThenCancelKeepsTheSavedState() async throws {
     for isNew in [false, true] {
       let element = textElement("A")
       let f = try makeSaveFixture(isNew ? [] : [element])
@@ -484,7 +487,7 @@ import struct SkitchoCore.Document
       }
       let start = f.document.initial
       f.controller.update(text: "B")
-      let saved = try f.saveStep()
+      let saved = try await f.saveStep()
       f.controller.update(text: "C")
       // No group is open: the cancel must not register anything.
       f.controller.cancel()
@@ -514,7 +517,7 @@ import struct SkitchoCore.Document
   }
 
   /// A new label saved with text and then emptied is deleted together with its link as one step.
-  @Test func savedNewLabelEmptiedIsDeletedAsOneStep() throws {
+  @Test func savedNewLabelEmptiedIsDeletedAsOneStep() async throws {
     let stamp = Element(
       kind: .stamp(.approve, center: CGPoint(x: 200, y: 200), tailAngle: nil, labelID: nil), style: style)
     let f = try makeSaveFixture([stamp])
@@ -522,7 +525,7 @@ import struct SkitchoCore.Document
     #expect(f.canvas.attachLabel(to: stamp.id))
     let labelID = try #require(f.controller.session?.id)
     f.controller.update(text: "B")
-    let saved = try f.saveStep()
+    let saved = try await f.saveStep()
     #expect(saved.elements.count == 2)
     #expect(f.manager.undoActionName == "Add Text")
 
@@ -544,12 +547,12 @@ import struct SkitchoCore.Document
 
   /// Undo is disabled during an edit; if one still runs after a mid-edit save, it undoes the save's step and
   /// the editor closes without registering anything, so the redo stays available.
-  @Test func undoDuringSavedEditRegistersNothing() throws {
+  @Test func undoDuringSavedEditRegistersNothing() async throws {
     let element = textElement("A")
     let f = try makeSaveFixture([element])
     #expect(f.controller.beginEditing(element.id))
     f.controller.update(text: "B")
-    let saved = try f.saveStep()
+    let saved = try await f.saveStep()
     f.controller.update(text: "C")
     f.manager.undo()
     #expect(!f.editor.isInteracting)
@@ -562,6 +565,23 @@ import struct SkitchoCore.Document
     #expect(f.manager.canRedo)
     f.manager.redo()
     #expect(f.editor.document == saved)
+  }
+
+  /// The checkpoint a save schedules is skipped when the edit ends before it runs: the commit already
+  /// registers the one step, so nothing is added.
+  @Test func scheduledCheckpointIsSkippedWhenTheEditEndedMeanwhile() async throws {
+    let element = textElement("Hello")
+    let f = try makeSaveFixture([element])
+    #expect(f.controller.beginEditing(element.id))
+    f.controller.update(text: "Hello world")
+    let saved = try f.save()
+    #expect(string(of: saved.elements[0]) == "Hello world")
+    grouped(f.manager) { f.controller.commit() }
+    for _ in 0..<3 { await Task.yield() }
+    #expect(f.manager.undoActionName == "Edit Text")
+    f.manager.undo()
+    #expect(!f.manager.canUndo)
+    #expect(f.editor.document == f.document.initial)
   }
 
   /// An empty new stamp label is not saved, and neither is its link.

@@ -111,3 +111,33 @@ import struct SkitchoCore.Document
     #expect(handle.zoom == 1)
   }
 }
+
+/// SwiftUI/NSDocument call `snapshot(contentType:)` on a background dispatch worker while the main thread is
+/// blocked in the save. The call must not touch main-actor state (that traps in the isolation check).
+@Suite struct DocumentOffMainSnapshotTests {
+  @MainActor @Test func snapshotWorksOffTheMainActor() async {
+    let doc = SkitchoDocument()
+    doc.editor.document.elements = [
+      Element(
+        kind: .line(start: CGPoint(x: 5, y: 6), end: CGPoint(x: 90, y: 60)),
+        style: Style.make(tool: .line, imageSize: doc.initial.canvasSize))
+    ]
+    let expected = doc.editor.document
+    let box = SendableBox(value: doc)
+    // `sync` would run the block on the calling (main) thread; `async` really hops to a worker thread.
+    let saved = await withCheckedContinuation { (continuation: CheckedContinuation<Document?, Never>) in
+      DispatchQueue.global().async {
+        continuation.resume(returning: try? snapshotViaProtocol(box.value))
+      }
+    }
+    #expect(saved == expected)
+  }
+}
+
+/// SwiftUI reaches `snapshot` through the protocol witness, which carries the dynamic isolation check (a
+/// direct call from a nonisolated context only warns and skips it).
+private func snapshotViaProtocol<D: ReferenceFileDocument>(_ document: D) throws -> D.Snapshot {
+  try document.snapshot(contentType: .skitchoDocument)
+}
+
+private struct SendableBox<T>: @unchecked Sendable { let value: T }

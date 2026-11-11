@@ -8,7 +8,12 @@ import Observation
 /// `beginInteractive` / `commitInteractive` / `cancelInteractive` (one undo step per gesture).
 @MainActor @Observable
 public final class EditorModel {
-  public var document: Document
+  public var document: Document {
+    didSet { onDocumentChange?() }
+  }
+  /// Called synchronously on the main actor after every change of `document` (the one hook the window uses to
+  /// publish the savable document for off-main saves).
+  @ObservationIgnored public var onDocumentChange: (() -> Void)?
   public var undoManager: UndoManager?
   public var currentTool: Tool = .select
   /// Selected element IDs (z-order is always taken from `document.elements`).
