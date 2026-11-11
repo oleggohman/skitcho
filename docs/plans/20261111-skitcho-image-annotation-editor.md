@@ -388,10 +388,10 @@
 - Create: `Sources/SkitchoUI/Canvas/ShapeToolController.swift`
 - Create: `Tests/SkitchoUITests/ShapeToolTests.swift`
 
-- [ ] drag creates the element with a live preview; Shift = square/circle/15° snap, Option = from center; minimum size, below which a click creates nothing
-- [ ] the selection rule from Technical Details (handles/selected element → manipulate, else draw)
-- [ ] write tests: each tool's drag produces the expected kind/geometry, Shift snap, tiny click is a no-op, a drag starting on an unselected element draws a new one
-- [ ] run tests. Must pass before task 17.
+- [x] drag creates the element with a live preview; Shift = square/circle/15° snap, Option = from center; minimum size, below which a click creates nothing
+- [x] the selection rule from Technical Details (handles/selected element → manipulate, else draw)
+- [x] write tests: each tool's drag produces the expected kind/geometry, Shift snap, tiny click is a no-op, a drag starting on an unselected element draws a new one
+- [x] run tests. Must pass before task 17.
 
 ### Task 17: Freehand marker and highlighter
 

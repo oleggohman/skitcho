@@ -58,6 +58,9 @@ public final class CanvasView: NSView {
     super.init(frame: .zero)
     controllers[.select] = selectController
     selectController.needsDisplay = { [weak self] in self?.needsDisplay = true }
+    for tool in ShapeToolController.supportedTools {
+      register(ShapeToolController(editor: editor, tool: tool, zoom: { box.value }), for: tool)
+    }
     updateFrameSize()
     observeEditor()
   }
