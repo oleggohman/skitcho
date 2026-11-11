@@ -363,11 +363,11 @@
 - Create: `Sources/SkitchoUI/Theme/BrandColor.swift`, `Typography.swift`, `Spacing.swift`, `Motion.swift`, `CZButtonStyle.swift`, `CZCard.swift`
 - Create: `Tests/SkitchoUITests/ThemeTests.swift`
 
-- [ ] `BrandColor` hex table (only hex in SkitchoUI) and semantic aliases with light/dark dynamic `NSColor(name:dynamicProvider:)` plus a SwiftUI `Color` bridge
-- [ ] `Typography` tokens → `Font.system(size:weight:)` / `NSFont.systemFont`; **no font files, no font registration**
-- [ ] `Spacing`, `Radius`, `Motion` tokens; `CZButtonStyle` (variants × sizes, disabled, hover with quick ease-in-out); `CZCard`
-- [ ] write tests: all hex parse, aliases differ between light and dark, typography resolves to the system font family at the expected sizes/weights, durations match the token set
-- [ ] run tests + test-bundle (hex lint). Must pass before task 15.
+- [x] `BrandColor` hex table (only hex in SkitchoUI) and semantic aliases with light/dark dynamic `NSColor(name:dynamicProvider:)` plus a SwiftUI `Color` bridge
+- [x] `Typography` tokens → `Font.system(size:weight:)` / `NSFont.systemFont`; **no font files, no font registration**
+- [x] `Spacing`, `Radius`, `Motion` tokens; `CZButtonStyle` (variants × sizes, disabled, hover with quick ease-in-out); `CZCard`
+- [x] write tests: all hex parse, aliases differ between light and dark, typography resolves to the system font family at the expected sizes/weights, durations match the token set
+- [x] run tests + test-bundle (hex lint). Must pass before task 15.
 
 ### Task 15: Canvas view — rendering, zoom, coordinate mapping, select/pan
 
