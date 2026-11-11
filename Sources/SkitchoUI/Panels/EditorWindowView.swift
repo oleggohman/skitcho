@@ -7,6 +7,8 @@ import SwiftUI
 @MainActor @Observable
 public final class CanvasHandle {
   public private(set) var zoom: Double = 1
+  /// True while the canvas follows the window size (fit mode).
+  public private(set) var isFit = true
   public private(set) weak var canvas: CanvasView?
   /// Runs before the canvas handles a mouse press or key (the window ends pending panel gestures here).
   public var willHandleCanvasInput: (() -> Void)?
@@ -19,7 +21,11 @@ public final class CanvasHandle {
   func attach(_ canvas: CanvasView) {
     self.canvas = canvas
     zoom = canvas.zoom
-    canvas.onZoomChange = { [weak self] value in self?.zoom = value }
+    isFit = canvas.fitMode
+    canvas.onZoomChange = { [weak self, weak canvas] value in
+      self?.zoom = value
+      self?.isFit = canvas?.fitMode ?? false
+    }
     canvas.willHandleInput = { [weak self] in self?.willHandleCanvasInput?() }
     canvas.onSavableDocumentChange = { [weak self] in self?.onSavableDocumentChange?() }
     onSavableDocumentChange?()
@@ -156,6 +162,11 @@ public struct EditorWindowView: View {
     return "\(Int(size.width.rounded())) × \(Int(size.height.rounded())) px"
   }
 
+  private var zoomPercent: Int { Int((handle.zoom * 100).rounded()) }
+
+  /// "Fit · 63%" while the canvas follows the window, plain "63%" after a manual zoom.
+  private var zoomText: String { handle.isFit ? "Fit · \(zoomPercent)%" : "\(zoomPercent)%" }
+
   private var zoomControls: some View {
     HStack(spacing: Spacing.xxs) {
       Button {
@@ -164,9 +175,10 @@ public struct EditorWindowView: View {
         Image(systemName: "minus")
       }
       .accessibilityLabel("Zoom out")
-      Button("\(Int((handle.zoom * 100).rounded()))%") { handle.actualSize() }
+      Button(zoomText) { handle.actualSize() }
         .frame(minWidth: 48)
         .help("Actual size")
+        .accessibilityLabel(handle.isFit ? "Fit, \(zoomPercent) percent" : "\(zoomPercent) percent")
       Button {
         handle.zoomIn()
       } label: {

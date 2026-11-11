@@ -90,6 +90,162 @@ import struct SkitchoCore.Document
     #expect(canvas.zoom == 1)
   }
 
+  // MARK: Fit mode
+
+  /// A scroll view hosting a 400 x 300 canvas, laid out at `size` the way the window does.
+  private func fittedScrollView(
+    size: CGSize = CGSize(width: 232, height: 1000)
+  ) -> (NSScrollView, CanvasView, EditorModel) {
+    let (editor, _) = makeEditor()
+    let (scrollView, canvas) = CanvasView.makeScrollView(editor: editor)
+    scrollView.hasVerticalScroller = false
+    scrollView.hasHorizontalScroller = false
+    resize(scrollView, to: size)
+    return (scrollView, canvas, editor)
+  }
+
+  private func resize(_ scrollView: NSScrollView, to size: CGSize) {
+    scrollView.setFrameSize(size)
+    scrollView.layoutSubtreeIfNeeded()
+  }
+
+  /// NSEvent cannot be built as a magnify event, so the pinch is faked through the two properties the canvas reads.
+  private final class PinchEvent: NSEvent {
+    override var magnification: CGFloat { 0.1 }
+    override var locationInWindow: NSPoint { .zero }
+  }
+
+  private func fitted(_ viewportWidth: Double, canvasWidth: Double = 400) -> Double {
+    min((viewportWidth - 2 * CanvasView.margin) / canvasWidth, 1)
+  }
+
+  @Test func resizingInFitModeRefitsAndNeverExceedsOne() {
+    let (scrollView, canvas, _) = fittedScrollView()
+    #expect(canvas.fitMode)
+    #expect(abs(canvas.zoom - fitted(232)) < 1e-9)
+    resize(scrollView, to: CGSize(width: 316, height: 1000))
+    #expect(abs(canvas.zoom - fitted(316)) < 1e-9)
+    resize(scrollView, to: CGSize(width: 5000, height: 5000))
+    #expect(canvas.zoom == 1)
+    #expect(canvas.fitMode)
+  }
+
+  @Test func manualZoomLeavesFitModeAndResizeKeepsTheZoom() {
+    let (scrollView, canvas, _) = fittedScrollView()
+    canvas.zoomIn()
+    #expect(!canvas.fitMode)
+    let zoomed = canvas.zoom
+    resize(scrollView, to: CGSize(width: 500, height: 700))
+    #expect(canvas.zoom == zoomed)
+
+    canvas.actualSize()
+    #expect(!canvas.fitMode)
+    resize(scrollView, to: CGSize(width: 300, height: 700))
+    #expect(canvas.zoom == 1)
+
+    canvas.zoomOut()
+    #expect(!canvas.fitMode)
+    canvas.zoomToFit()
+    #expect(canvas.fitMode)
+  }
+
+  @Test func zoomToFitReentersFitModeAndSetZoomDoesNotLeaveIt() {
+    let (scrollView, canvas, _) = fittedScrollView()
+    canvas.actualSize()
+    #expect(!canvas.fitMode)
+    canvas.zoomToFit()
+    #expect(canvas.fitMode)
+    #expect(abs(canvas.zoom - fitted(232)) < 1e-9)
+    // setZoom is also the fit path itself, so it never changes the mode.
+    canvas.setZoom(0.5)
+    #expect(canvas.fitMode)
+    resize(scrollView, to: CGSize(width: 316, height: 1000))
+    #expect(abs(canvas.zoom - fitted(316)) < 1e-9)
+  }
+
+  @Test func pinchLeavesFitMode() {
+    let (_, canvas, _) = fittedScrollView()
+    canvas.magnify(with: PinchEvent())
+    #expect(!canvas.fitMode)
+  }
+
+  @Test func layoutDoesNotCallBackWhenTheFitIsUnchanged() {
+    let (scrollView, canvas, _) = fittedScrollView()
+    var calls = 0
+    canvas.onZoomChange = { _ in calls += 1 }
+    scrollView.needsLayout = true
+    scrollView.layoutSubtreeIfNeeded()
+    // Same width, different height that does not bind the fit.
+    resize(scrollView, to: CGSize(width: 232, height: 1200))
+    #expect(calls == 0)
+    resize(scrollView, to: CGSize(width: 316, height: 1200))
+    #expect(calls == 1)
+  }
+
+  @Test func canvasSizeChangeRefitsInFitModeIncludingUndo() throws {
+    let (editor, manager) = makeEditor()
+    let (scrollView, canvas) = CanvasView.makeScrollView(editor: editor)
+    scrollView.hasVerticalScroller = false
+    scrollView.hasHorizontalScroller = false
+    resize(scrollView, to: CGSize(width: 232, height: 1000))
+    #expect(abs(canvas.zoom - fitted(232)) < 1e-9)
+
+    manager.beginUndoGrouping()
+    try editor.crop(to: CGRect(x: 0, y: 0, width: 200, height: 150))
+    manager.endUndoGrouping()
+    canvas.editorDidChange()
+    #expect(abs(canvas.zoom - fitted(232, canvasWidth: 200)) < 1e-9)
+
+    manager.undo()
+    canvas.editorDidChange()
+    #expect(abs(canvas.zoom - fitted(232)) < 1e-9)
+  }
+
+  @Test func canvasSizeChangeKeepsTheZoomOutsideFitMode() throws {
+    let (editor, manager) = makeEditor()
+    let (scrollView, canvas) = CanvasView.makeScrollView(editor: editor)
+    resize(scrollView, to: CGSize(width: 232, height: 1000))
+    canvas.actualSize()
+    manager.beginUndoGrouping()
+    try editor.crop(to: CGRect(x: 0, y: 0, width: 200, height: 150))
+    manager.endUndoGrouping()
+    canvas.editorDidChange()
+    #expect(canvas.zoom == 1)
+  }
+
+  @Test func cropBarAppearingDoesNotChangeTheZoom() {
+    let (editor, _) = makeEditor()
+    let (scrollView, canvas) = CanvasView.makeScrollView(editor: editor)
+    scrollView.hasVerticalScroller = false
+    scrollView.hasHorizontalScroller = false
+    resize(scrollView, to: CGSize(width: 232, height: 1000))
+    let before = canvas.zoom
+    editor.currentTool = .crop
+    canvas.editorDidChange()
+    #expect(canvas.cropBar != nil)
+    #expect(canvas.bottomReserve > 0)
+    #expect(canvas.zoom == before)
+    scrollView.needsLayout = true
+    scrollView.layoutSubtreeIfNeeded()
+    // A later window resize does take the reserve into account.
+    resize(scrollView, to: CGSize(width: 232, height: 280))
+    let reserve = canvas.bottomReserve
+    #expect(abs(canvas.zoom - min((280 - 2 * CanvasView.margin - reserve) / 300, before)) < 1e-9)
+  }
+
+  @Test func handleTracksFitMode() {
+    let (_, canvas, _) = fittedScrollView()
+    let handle = CanvasHandle()
+    handle.attach(canvas)
+    #expect(handle.isFit)
+    handle.zoomIn()
+    #expect(!handle.isFit)
+    handle.zoomToFit()
+    #expect(handle.isFit)
+    handle.actualSize()
+    #expect(!handle.isFit)
+  }
+
   /// A scroll view of `viewport` hosting a canvas for a large document, laid out like the window does.
   private func scrolledCanvas(viewport: CGSize = CGSize(width: 400, height: 300)) -> (NSScrollView, CanvasView) {
     let editor = EditorModel(document: Document.blank(size: CGSize(width: 2000, height: 1500)), undoManager: nil)

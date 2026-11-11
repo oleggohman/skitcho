@@ -44,6 +44,9 @@ public final class CanvasView: NSView {
 
   public let editor: EditorModel
   public private(set) var zoom: Double = 1
+  /// While true the canvas follows the viewport and canvas size (fit, never above 100%). A manual zoom (buttons,
+  /// pinch) turns it off; `zoomToFit()` turns it back on.
+  public private(set) var fitMode = true
   /// Called after every zoom change so the shell can show the zoom level.
   public var onZoomChange: ((Double) -> Void)?
   /// Called before the canvas handles a mouse press or key, so the shell can end pending panel gestures
@@ -214,21 +217,51 @@ public final class CanvasView: NSView {
     onZoomChange?(zoom)
   }
 
-  public func zoomIn() { setZoom(zoom * Self.zoomStep) }
-  public func zoomOut() { setZoom(zoom / Self.zoomStep) }
-  public func actualSize() { setZoom(1) }
+  public func zoomIn() {
+    fitMode = false
+    setZoom(zoom * Self.zoomStep)
+  }
 
-  /// Fits the canvas into `viewport` (never above 100%). Uses the scroll view size when omitted.
-  public func zoomToFit(viewport: CGSize? = nil) {
-    guard let size = viewport ?? viewportSize else { return }
+  public func zoomOut() {
+    fitMode = false
+    setZoom(zoom / Self.zoomStep)
+  }
+
+  public func actualSize() {
+    fitMode = false
+    setZoom(1)
+  }
+
+  /// The zoom that fits the canvas into `viewport` (never above 100%), or nil without a usable size.
+  private func fittedZoom(viewport: CGSize? = nil) -> Double? {
+    guard let size = viewport ?? viewportSize else { return nil }
     let canvas = editor.document.canvasSize
-    guard canvas.width > 0, canvas.height > 0 else { return }
+    guard canvas.width > 0, canvas.height > 0 else { return nil }
     let fitX = (size.width - 2 * Self.margin) / canvas.width
     let fitY = (size.height - 2 * Self.margin - bottomReserve) / canvas.height
-    setZoom(min(fitX, fitY, 1))
+    return min(fitX, fitY, 1)
+  }
+
+  /// Fits the canvas into `viewport` (never above 100%) and enters fit mode. Uses the scroll view size when
+  /// omitted.
+  public func zoomToFit(viewport: CGSize? = nil) {
+    guard let fitted = fittedZoom(viewport: viewport) else { return }
+    fitMode = true
+    setZoom(fitted)
+  }
+
+  /// In fit mode, refits to the viewport; skips `setZoom` when the zoom is already right so a live resize does
+  /// not churn `onZoomChange`. Outside fit mode, or without a usable size, only re-lays out the frame.
+  func refitIfNeeded() {
+    if fitMode, let fitted = fittedZoom(), abs(fitted - zoom) > 1e-9 {
+      setZoom(fitted)
+    } else {
+      updateFrameSize()
+    }
   }
 
   public override func magnify(with event: NSEvent) {
+    fitMode = false
     setZoom(zoom * (1 + event.magnification), anchor: convert(event.locationInWindow, from: nil))
   }
 
@@ -251,7 +284,8 @@ public final class CanvasView: NSView {
     let size = editor.document.canvasSize
     if size != lastCanvasSize {
       lastCanvasSize = size
-      updateFrameSize()
+      // Crop, rotate, resize and their undo; a bottomReserve-only change (the crop bar) must not refit.
+      refitIfNeeded()
     }
     if let textController, textController.isEditing {
       // An undo that ran during the edit ended its gesture; close the editor without applying it.
@@ -581,15 +615,12 @@ public final class CanvasView: NSView {
 /// Scroll view that tells its canvas to re-size and re-center whenever the viewport changes.
 @MainActor
 final class CanvasScrollView: NSScrollView {
-  /// The canvas is fitted to the viewport once, on the first layout that has a real size.
-  private var didInitialFit = false
-
   override func layout() {
     super.layout()
-    if !didInitialFit, contentSize.width > 0, contentSize.height > 0, let canvas = documentView as? CanvasView {
-      didInitialFit = true
-      canvas.zoomToFit()
+    guard let canvas = documentView as? CanvasView else { return }
+    if canvas.fitMode, contentSize.width > 0, contentSize.height > 0 {
+      canvas.refitIfNeeded()
     }
-    (documentView as? CanvasView)?.updateFrameSize()
+    canvas.updateFrameSize()
   }
 }

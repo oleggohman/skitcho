@@ -205,19 +205,19 @@ The maintainer is away and asked for autonomous execution. Decisions not settled
 - Modify: `Tests/SkitchoUITests/CanvasMappingTests.swift`
 - Delete: `docs/backlog/canvas-fit-follows-window-resize.md`
 
-- [ ] add `fitMode` (default on); `CanvasScrollView.layout()` refits while it is on (replacing `didInitialFit`); cap 100%, centred, margin and the current reserve included
-- [ ] `fitMode = false` only in `zoomIn`/`zoomOut`/`actualSize`/`magnify`; `zoomToFit()` sets it true; in fit mode, refit on `canvasSize` change but not on `bottomReserve`-only changes
-- [ ] the bottom-bar label shows `Fit · NN%` in fit mode, with a matching accessibility label
-- [ ] in `layout()`, skip `setZoom` when the fitted zoom is within 1e-9 of the current zoom, so `onZoomChange`/SwiftUI cannot churn during a live resize; tests touching `editorDidChange` (which runs from an async Task) must yield or await
-- [ ] write tests:
+- [x] add `fitMode` (default on); `CanvasScrollView.layout()` refits while it is on (replacing `didInitialFit`); cap 100%, centred, margin and the current reserve included
+- [x] `fitMode = false` only in `zoomIn`/`zoomOut`/`actualSize`/`magnify`; `zoomToFit()` sets it true; in fit mode, refit on `canvasSize` change but not on `bottomReserve`-only changes
+- [x] the bottom-bar label shows `Fit · NN%` in fit mode, with a matching accessibility label
+- [x] in `layout()`, skip `setZoom` when the fitted zoom is within 1e-9 of the current zoom, so `onZoomChange`/SwiftUI cannot churn during a live resize; tests touching `editorDidChange` (which runs from an async Task) must yield or await
+- [x] write tests:
   - scroll view resize in fit mode changes the zoom and never exceeds 1.0
   - after `zoomIn` or `actualSize` (the percentage button), a resize keeps the zoom
   - `zoomToFit()` re-enters fit mode
   - in fit mode, a canvas size change (crop/rotate/resize, and their undo) refits
   - the crop bar appearing does not change the zoom
   - `zoomToFit` itself does not clear fit mode
-- [ ] `git rm docs/backlog/canvas-fit-follows-window-resize.md` in this task's commit
-- [ ] run tests — must pass before task 5
+- [x] `git rm docs/backlog/canvas-fit-follows-window-resize.md` in this task's commit
+- [x] run tests — must pass before task 5
 
 ### Task 5: JPEG writer and save formats (pure part)
 
