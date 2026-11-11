@@ -135,7 +135,8 @@ Zooming by hand (⌘+, ⌘-, ⌘0 or pinch) leaves fit mode; ⌘9 Zoom to Fit re
 
 ## Saving
 
-- **⌘S saves a flattened JPEG** (quality 90%) by default.
+- **⌘S saves a flattened JPEG** (quality 90%) for pictures and JPEGs. In an open `.skitcho` document, ⌘S
+  saves the `.skitcho`.
 - **An opened JPG** is overwritten in place only when you press ⌘S. Skitcho writes a JPEG only on an explicit
   ⌘S or Save As…; the document system itself can save only the editable Skitcho format.
 - **A new picture or another image type** (PNG, HEIC, …) asks where to save, with JPEG preselected and
