@@ -47,7 +47,14 @@ public final class ExportAccessoryModel {
 
   @ObservationIgnored private let defaults: UserDefaults
 
-  public var kind: Kind { didSet { defaults.set(kind.rawValue, forKey: Key.kind) } }
+  public var kind: Kind {
+    didSet {
+      defaults.set(kind.rawValue, forKey: Key.kind)
+      if kind != oldValue { onKindChange?(kind) }
+    }
+  }
+  /// Called after the format changed (the save panel follows with its file type and extension).
+  @ObservationIgnored public var onKindChange: ((Kind) -> Void)?
   /// JPEG quality in 0...1.
   public var jpegQuality: Double { didSet { defaults.set(jpegQuality, forKey: Key.quality) } }
   public var retina: Bool { didSet { defaults.set(retina, forKey: Key.retina) } }
@@ -124,21 +131,15 @@ public enum ExportPresenter {
     host.setFrameSize(host.fittingSize)
     panel.accessoryView = host
 
-    // The file extension follows the chosen format.
-    var observed = model.kind
-    let timer = Timer(timeInterval: 0.15, repeats: true) { _ in
-      MainActor.assumeIsolated {
-        guard model.kind != observed else { return }
-        observed = model.kind
-        panel.allowedContentTypes = [model.kind.contentType]
-        panel.nameFieldStringValue = model.fileName(for: panel.nameFieldStringValue)
-        host.setFrameSize(host.fittingSize)
-      }
+    // The file type and extension follow the chosen format as soon as it changes.
+    model.onKindChange = { [weak panel, weak host] _ in
+      guard let panel else { return }
+      follow(model, panel: panel)
+      host?.setFrameSize(host?.fittingSize ?? .zero)
     }
-    RunLoop.main.add(timer, forMode: .common)
 
     let finish: (NSApplication.ModalResponse) -> Void = { response in
-      timer.invalidate()
+      model.onKindChange = nil
       guard response == .OK, let url = panel.url else { return }
       do {
         let data = try Exporter.data(document(), format: model.format, scale: model.scale)
@@ -152,5 +153,11 @@ public enum ExportPresenter {
     } else {
       finish(panel.runModal())
     }
+  }
+
+  /// Matches the panel's file type and name extension to the model's format.
+  static func follow(_ model: ExportAccessoryModel, panel: NSSavePanel) {
+    panel.allowedContentTypes = [model.kind.contentType]
+    panel.nameFieldStringValue = model.fileName(for: panel.nameFieldStringValue)
   }
 }

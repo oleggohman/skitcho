@@ -86,6 +86,20 @@ private final class LockedBox<T>: @unchecked Sendable {
     #expect(model.fileName(for: "v1.2 draft") == "v1.2 draft.tiff")
   }
 
+  /// The save panel follows a format change at once through `onKindChange` (no polling).
+  @Test func kindChangeNotifiesImmediatelyAndOnlyOnChange() {
+    let (defaults, cleanup) = privateDefaults()
+    defer { cleanup() }
+    let model = ExportAccessoryModel(defaults: defaults)
+    var seen: [ExportAccessoryModel.Kind] = []
+    model.onKindChange = { seen.append($0) }
+    model.kind = .jpeg
+    model.kind = .jpeg
+    model.retina = true
+    model.kind = .tiff
+    #expect(seen == [.jpeg, .tiff])
+  }
+
   @Test func exportAsCommandIsEnabledAndPresents() {
     let editor = EditorModel(document: Document.blank(size: CGSize(width: 40, height: 30)), undoManager: nil)
     let handle = CanvasHandle()
