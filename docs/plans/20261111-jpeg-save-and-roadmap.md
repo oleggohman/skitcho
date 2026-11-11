@@ -242,14 +242,14 @@ The maintainer is away and asked for autonomous execution. Decisions not settled
 - Modify: `Sources/SkitchoUI/Panels/EditorWindowView.swift`, `Sources/Skitcho/SkitchoApp.swift` (pass `file.fileURL`), `Sources/SkitchoUI/Document/SkitchoDocument.swift` (only if needed)
 - Create: `Tests/SkitchoUITests/SaveCoordinatorTests.swift`
 
-- [ ] implement `SaveCoordinator` exactly as described in Technical Details:
+- [x] implement `SaveCoordinator` exactly as described in Technical Details:
   - direct NSDocument resolution
   - URL read at save time
   - `save()` precedence and `saveAs()` rules
   - JPEG write: commit the text edit, presenter-excluded coordination, `replaceItemAt`, `fileModificationDate`, `.changeCleared`
   - Skitcho handoff via a completion handler
   - injected panel, writer and document seams
-- [ ] write tests with a test `NSDocument` subclass that records `save(_:)`/`saveAs(_:)`/`save(to:ofType:for:completionHandler:)` and presents a temp file, and a stubbed panel:
+- [x] write tests with a test `NSDocument` subclass that records `save(_:)`/`saveAs(_:)`/`save(to:ofType:for:completionHandler:)` and presents a temp file, and a stubbed panel:
   - opened JPEG + `save()` overwrites that file with a decodable flattened JPEG; `isDocumentEdited == false`; `fileModificationDate` equals the file's date
   - opened JPEG with both URLs nil → panel with JPEG preselected (the ⚠️ fallback)
   - untitled + `save()` → panel; choosing JPEG writes and sets the target; the next `save()` writes without a panel
@@ -258,7 +258,7 @@ The maintainer is away and asked for autonomous execution. Decisions not settled
   - opened PNG: `save()` shows the panel and the PNG bytes are unchanged
   - ⌘S during a text edit saves the live string
   - a write failure leaves the document dirty and shows the readable message
-- [ ] run tests — must pass before task 7
+- [x] run tests — must pass before task 7
 
 ### Task 7: Save panel accessory and File menu
 

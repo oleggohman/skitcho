@@ -9,7 +9,7 @@ struct SkitchoApp: App {
   var body: some Scene {
     DocumentGroup(
       newDocument: { SkitchoDocument() },
-      editor: { file in EditorWindowView(document: file.document) }
+      editor: { file in EditorWindowView(document: file.document, fileURL: file.fileURL) }
     )
     .commands { SkitchoCommands(updater: updater) }
 

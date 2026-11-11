@@ -533,6 +533,14 @@ public final class CanvasView: NSView {
   /// True while a text element is being edited (keys then belong to the text editor).
   public var isEditingText: Bool { textController?.isEditing ?? false }
 
+  /// Ends a running text edit with the overlay's live string (a no-op when none is running), so a save that
+  /// reads `editor.document` afterwards includes it.
+  public func commitTextEdit() {
+    guard let textController, textController.isEditing else { return }
+    textController.commit(text: textOverlay?.string ?? textController.session?.string ?? "")
+    window?.makeFirstResponder(self)
+  }
+
   /// The document to save: like `editor.document`, but with a running text edit's live string in place.
   public var savableDocument: Document { textController?.documentCommittingEdit ?? editor.document }
 

@@ -71,9 +71,15 @@ public struct EditorWindowView: View {
   @State private var properties: PropertiesModel
   @State private var commands: EditorCommandModel
   @State private var dragOut: DragOutSource
+  /// Save and Save As for this window (the File menu reaches it in a later step).
+  @State private var saver: SaveCoordinator
+  /// The file `DocumentGroup` opened this document from; a fallback for the save coordinator when the
+  /// window's `NSDocument` has no URL. Passed on at appear and on change, never cached by the coordinator.
+  private let fileURL: URL?
 
-  public init(document: SkitchoDocument) {
+  public init(document: SkitchoDocument, fileURL: URL? = nil) {
     self.editor = document.editor
+    self.fileURL = fileURL
     let handle = document.canvasHandle
     _handle = State(initialValue: handle)
     _commands = State(initialValue: EditorCommandModel(editor: document.editor, handle: handle))
@@ -82,6 +88,7 @@ public struct EditorWindowView: View {
       initialValue: DragOutSource(
         document: { editor.document },
         documentName: { [weak handle] in handle?.canvas?.window?.title }))
+    _saver = State(initialValue: SaveCoordinator(editor: document.editor, handle: handle))
     _palette = State(initialValue: ToolPaletteModel(editor: document.editor))
     _properties = State(
       initialValue: PropertiesModel(
@@ -131,11 +138,15 @@ public struct EditorWindowView: View {
     // whose state storage owns the model (a retain cycle that would keep the closed window's editor alive).
     .onAppear {
       Self.bind(editor, to: undoManager)
+      saver.fallbackURL = fileURL
+      let commands = commands
+      saver.onError = { [weak commands] in commands?.errorMessage = $0 }
       // A canvas gesture must not share the interactive slot with a pending custom color change.
       let properties = properties
       handle.willHandleCanvasInput = { [weak properties] in properties?.finishCustomColor() }
     }
     .onChange(of: undoManager) { _, new in Self.bind(editor, to: new) }
+    .onChange(of: fileURL) { _, new in saver.fallbackURL = new }
   }
 
   private var bottomBar: some View {
