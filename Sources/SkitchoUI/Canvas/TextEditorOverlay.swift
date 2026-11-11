@@ -14,6 +14,8 @@ final class TextEditorOverlay: NSTextView {
   let sessionID: UUID
   var onTextChange: ((String) -> Void)?
   var onCommit: ((String) -> Void)?
+  /// Called after Escape has committed the edit, so the canvas can take focus and switch to the Select tool.
+  var onEscape: (() -> Void)?
 
   init(sessionID: UUID, string: String) {
     self.sessionID = sessionID
@@ -75,9 +77,12 @@ final class TextEditorOverlay: NSTextView {
     onTextChange?(string)
   }
 
-  /// Escape finishes the edit and keeps the text.
+  /// Escape finishes the edit and keeps the text, then reports the Escape (the commit may detach this overlay,
+  /// so the callback is read first).
   override func cancelOperation(_ sender: Any?) {
+    let escape = onEscape
     onCommit?(string)
+    escape?()
   }
 
   override func resignFirstResponder() -> Bool {

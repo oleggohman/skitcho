@@ -185,9 +185,9 @@ The maintainer is away and asked for autonomous execution. Decisions not settled
 - Modify: tests in `Tests/SkitchoUITests` (TextTool, Shape, Crop, Pixelate, Commands or a new `EscapeTests.swift`)
 - Delete: `docs/backlog/esc-switches-to-select-tool.md`
 
-- [ ] overlay Esc: commit as today, return first responder to the canvas, switch to Select (covers stamp labels)
-- [ ] canvas Esc: after the active controller's own Esc, switch to Select when not already on it; leaving a non-Select tool keeps the selection; Esc on Select clears it (as today)
-- [ ] write tests, through the real paths (`overlay.cancelOperation(nil)` via the canvas, and `canvas.handleKey` with an Esc event or the existing key seam):
+- [x] overlay Esc: commit as today, return first responder to the canvas, switch to Select (covers stamp labels)
+- [x] canvas Esc: after the active controller's own Esc, switch to Select when not already on it; leaving a non-Select tool keeps the selection; Esc on Select clears it (as today)
+- [x] write tests, through the real paths (`overlay.cancelOperation(nil)` via the canvas, and `canvas.handleKey` with an Esc event or the existing key seam):
   - text editing → committed + Select
   - stamp label editing → committed + Select
   - mid-drag shape → cancelled, no element, + Select, and later drags/mouse-up create nothing and don't crash
@@ -195,8 +195,8 @@ The maintainer is away and asked for autonomous execution. Decisions not settled
   - pending crop → cancelled + Select
   - on Select → selection cleared
   - arrow tool with a selection → Select and the selection is kept
-- [ ] `git rm docs/backlog/esc-switches-to-select-tool.md` in this task's commit
-- [ ] run tests — must pass before task 4
+- [x] `git rm docs/backlog/esc-switches-to-select-tool.md` in this task's commit
+- [x] run tests — must pass before task 4
 
 ### Task 4: Fit mode follows window and canvas size
 

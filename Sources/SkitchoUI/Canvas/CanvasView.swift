@@ -281,6 +281,7 @@ public final class CanvasView: NSView {
       let overlay = TextEditorOverlay(sessionID: session.id, string: session.string)
       overlay.onTextChange = { [weak self] string in self?.textController?.update(text: string) }
       overlay.onCommit = { [weak self] string in self?.textController?.commit(text: string) }
+      overlay.onEscape = { [weak self] in self?.returnToSelectAfterEscape() }
       addSubview(overlay)
       textOverlay = overlay
       layoutTextOverlay()
@@ -296,6 +297,7 @@ public final class CanvasView: NSView {
     textOverlay = nil
     // Detach first: removing the first responder triggers resignFirstResponder, which must not commit again.
     overlay.onCommit = nil
+    overlay.onEscape = nil
     overlay.onTextChange = nil
     overlay.removeFromSuperview()
     window?.makeFirstResponder(self)
@@ -516,7 +518,24 @@ public final class CanvasView: NSView {
       editor.currentTool = tool
       return true
     }
-    return activeController.keyDown(key, modifiers: modifiers)
+    let selectionBefore = editor.selection
+    let wasEditingText = isEditingText
+    let handled = activeController.keyDown(key, modifiers: modifiers)
+    // Escape ends whatever the tool had in progress (above), then leaves the tool. The selection is kept
+    // (some tools clear it on Escape); only Escape on the Select tool itself clears it.
+    if key == .escape, editor.currentTool != .select {
+      // A committed text edit selects its element, which stays.
+      if !wasEditingText, editor.selection != selectionBefore { editor.select(ids: selectionBefore) }
+      editor.currentTool = .select
+      return true
+    }
+    return handled
+  }
+
+  /// Escape in the text editor: the edit is already committed; focus returns to the canvas and Select takes over.
+  private func returnToSelectAfterEscape() {
+    window?.makeFirstResponder(self)
+    if editor.currentTool != .select { editor.currentTool = .select }
   }
 
   public override func keyUp(with event: NSEvent) {
