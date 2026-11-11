@@ -277,10 +277,10 @@ The maintainer is away and asked for autonomous execution. Decisions not settled
 - [x] run tests — must pass before task 8
 
 ### Task 8: Verify acceptance criteria
-- [ ] every Overview item is implemented and tested; `docs/backlog/` no longer holds the 4 items
-- [ ] full `swift test --arch arm64 --no-parallel` (all three passed lines), zero project warnings, lint, `scripts/test-bundle.sh`, `scripts/test-bundle.sh --release-dry-run`, `scripts/test-workflows.sh`
-- [ ] the save paths never touch main-actor state off-main: `snapshot`/`fileWrapper` are unchanged and nonisolated; `SaveCoordinator` is main-actor only; `writableContentTypes == [.skitchoDocument]`
-- [ ] manual GUI check deferred to the maintainer (`open` is blocked for agents)
+- [x] every Overview item is implemented and tested; `docs/backlog/` no longer holds the 4 items
+- [x] full `swift test --arch arm64 --no-parallel` (all three passed lines), zero project warnings, lint, `scripts/test-bundle.sh`, `scripts/test-bundle.sh --release-dry-run`, `scripts/test-workflows.sh`
+- [x] the save paths never touch main-actor state off-main: `snapshot`/`fileWrapper` are unchanged and nonisolated; `SaveCoordinator` is main-actor only; `writableContentTypes == [.skitchoDocument]`
+- [x] manual GUI check deferred to the maintainer (`open` is blocked for agents) (deferred to maintainer — open is blocked for agents)
 
 ### Task 9: [Final] Update documentation
 - [ ] README:
