@@ -7,10 +7,12 @@
 #      FIRST_RELEASE=1 (required when no feed is published yet: only then is a 404 for the feed accepted),
 #      MINISIGN_SECRET_KEY (path of the minisign secret key that signs the DMG; required, also with --dry-run),
 #      MINISIGN_PUBLIC_KEY_FILE (path of the matching public key, default: minisign.pub at the repository root;
-#      only --dry-run may point it elsewhere).
+#      only --dry-run may point it elsewhere),
+#      MINISIGN_PASSWORD (optional: the minisign key password, for unattended signing; empty counts as unset).
 # --dry-run signs ad-hoc and skips notarization. Requires openssl@3 (ed25519) to check the Sparkle key pair
-# and minisign. minisign reads the key password from stdin (two prompts: a preflight test signature and the
-# final signature after notarization), so a real release requires stdin to be a terminal.
+# and minisign. With MINISIGN_PASSWORD set, the password is piped to minisign and no terminal is needed.
+# Without it, minisign reads the password from stdin (two prompts: a preflight test signature and the final
+# signature after notarization), so a real release then requires stdin to be a terminal.
 # Local only: run on the maintainer's Mac, then publish by hand with `gh release create` (see docs/RELEASING.md).
 # Secrets are only read from the environment and never printed. Do not add xtrace.
 set -euo pipefail
@@ -43,7 +45,8 @@ APPCAST_URL="${APPCAST_URL:-https://github.com/oleggohman/skitcho/releases/lates
 
 # Keep secrets out of the environment of every child process (swift build, codesign, notarytool, ...).
 # They are passed explicitly: the Sparkle key on stdin, the notarization values as arguments.
-export -n SPARKLE_ED_PRIVATE_KEY AppleStoreAPIKey AppleIssuerID ASC_KEY_PATH 2>/dev/null || true
+# MINISIGN_PASSWORD reaches only minisign, through a pipe from the printf builtin (minisign_sign).
+export -n SPARKLE_ED_PRIVATE_KEY AppleStoreAPIKey AppleIssuerID ASC_KEY_PATH MINISIGN_PASSWORD 2>/dev/null || true
 
 WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
@@ -94,9 +97,21 @@ else
 fi
 
 # minisign: the secret key's id is encrypted, so a test signature verified with the public key is the only way
-# to catch a wrong key or password before building and notarizing. stdin stays attached for the password.
+# to catch a wrong key or password before building and notarizing. Without MINISIGN_PASSWORD, stdin stays
+# attached for the password prompt.
 command -v minisign >/dev/null 2>&1 || fail "minisign not found (brew install minisign)"
 MINISIGN_SECRET_KEY="${MINISIGN_SECRET_KEY:-}"
+MINISIGN_PASSWORD="${MINISIGN_PASSWORD:-}"
+# Runs `minisign -S "$@"`. With MINISIGN_PASSWORD set, the password is piped from the printf builtin (never
+# argv, disk or output); otherwise stdin stays attached for the prompt. MINISIGN_PASSWORD is meant for the
+# encrypted key: with an unencrypted key minisign never reads stdin and printf can hit SIGPIPE under pipefail.
+minisign_sign() {
+  if [[ -n "$MINISIGN_PASSWORD" ]]; then
+    printf '%s\n' "$MINISIGN_PASSWORD" | minisign -S "$@"
+  else
+    minisign -S "$@"
+  fi
+}
 MINISIGN_PUBLIC_KEY_FILE="${MINISIGN_PUBLIC_KEY_FILE:-$ROOT/minisign.pub}"
 [[ -n "$MINISIGN_SECRET_KEY" ]] || fail "MINISIGN_SECRET_KEY is not set"
 [[ -f "$MINISIGN_SECRET_KEY" && -r "$MINISIGN_SECRET_KEY" ]] ||
@@ -106,15 +121,17 @@ if [[ "$DRY_RUN" == 0 ]]; then
   # A real release verifies only against the committed key that README and SECURITY publish.
   [[ "$MINISIGN_PUBLIC_KEY_FILE" == "$ROOT/minisign.pub" ]] ||
     fail "MINISIGN_PUBLIC_KEY_FILE must be unset for a real release (got '$MINISIGN_PUBLIC_KEY_FILE')"
-  # A piped password would be consumed by the test signature and leave the final signature with EOF.
-  [[ -t 0 ]] || fail "stdin is not a terminal: minisign needs it for the key password"
+  # Without MINISIGN_PASSWORD, a password piped into release.sh would be consumed by the test signature and
+  # leave the final signature with EOF, so the prompts need a terminal.
+  [[ -n "$MINISIGN_PASSWORD" || -t 0 ]] ||
+    fail "stdin is not a terminal: minisign needs it for the key password (or set MINISIGN_PASSWORD)"
 fi
 NONCE="$WORK/minisign-nonce"
 printf 'skitcho release %s preflight %s\n' "$VERSION" "$(date +%s)" >"$NONCE"
 echo "minisign: test signature (enter the minisign key password if asked)"
-if ! minisign -S -s "$MINISIGN_SECRET_KEY" -m "$NONCE" -x "$NONCE.minisig" ||
+if ! minisign_sign -s "$MINISIGN_SECRET_KEY" -m "$NONCE" -x "$NONCE.minisig" ||
   ! minisign -V -q -p "$MINISIGN_PUBLIC_KEY_FILE" -m "$NONCE" -x "$NONCE.minisig"; then
-  fail "MINISIGN_SECRET_KEY does not match $MINISIGN_PUBLIC_KEY_FILE (or wrong password)"
+  fail "MINISIGN_SECRET_KEY does not match $MINISIGN_PUBLIC_KEY_FILE (or wrong password / MINISIGN_PASSWORD)"
 fi
 rm -f "$NONCE" "$NONCE.minisig"
 
@@ -234,18 +251,19 @@ printf '%s' "$SPARKLE_ED_PRIVATE_KEY" | "$GA" --ed-key-file - --maximum-versions
 
 # ---------------------------------------------------------------------------------------------------
 # minisign signature of the final DMG (stapled and in the appcast), published next to it as a release asset.
-# stdin stays attached for the password prompt; up to 3 attempts on a terminal, one otherwise.
+# With MINISIGN_PASSWORD: one attempt (the preflight already checked the password). Without it, stdin stays
+# attached for the password prompt: up to 3 attempts on a terminal, one otherwise.
 # ---------------------------------------------------------------------------------------------------
 MINISIG="$DMG.minisig"
 TRUSTED_COMMENT="Skitcho $VERSION Skitcho-$VERSION.dmg"
 attempts=1
-if [[ -t 0 ]]; then
+if [[ -z "$MINISIGN_PASSWORD" && -t 0 ]]; then
   attempts=3
 fi
 signed=0
 for ((i = 1; i <= attempts; i++)); do
   echo "minisign: signing $(basename "$DMG") (attempt $i of $attempts)"
-  if minisign -S -s "$MINISIGN_SECRET_KEY" -m "$DMG" -x "$MINISIG" -t "$TRUSTED_COMMENT"; then
+  if minisign_sign -s "$MINISIGN_SECRET_KEY" -m "$DMG" -x "$MINISIG" -t "$TRUSTED_COMMENT"; then
     signed=1
     break
   fi
