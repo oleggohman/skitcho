@@ -125,6 +125,6 @@ Implementation notes (from plan review, approved):
 - [ ] move this plan to `docs/plans/completed/`
 
 ## Post-Completion
-- the maintainer stores the password in the Keychain once (interactive, Task 2 command)
+- the maintainer stores the password in the Keychain once (interactive, Task 2 command): done (2026-11-13)
 - after merge to main and push: Trivy (`trivy fs --scanners vuln,secret,misconfig .`)
 - next real release (0.2.1) can then run end to end without typing the password

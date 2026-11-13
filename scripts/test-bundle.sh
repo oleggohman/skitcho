@@ -118,13 +118,33 @@ XML
     "MINISIGN_SECRET_KEY does not point to a readable file" "$PUB" "$OLD_FEED"
   MINISIGN_SECRET_KEY="$WORK/other.key" expect_reject "a minisign key not matching the public key" \
     "MINISIGN_SECRET_KEY does not match" "$PUB" "$OLD_FEED"
-  MINISIGN_SECRET_KEY="$WORK/enc.key" MINISIGN_PUBLIC_KEY_FILE="$WORK/enc.pub" MINISIGN_PASSWORD="$WRONG_PW" \
+  # For this case only, a stub minisign first on PATH fails if the password reaches it through its environment
+  # or argv, and otherwise runs the real minisign unchanged.
+  mkdir "$WORK/stub-bin"
+  {
+    echo '#!/usr/bin/env bash'
+    printf 'pw=%q\n' "$WRONG_PW"
+    echo 'touch "$WORK_STUB_CALLED"'
+    echo '[[ -z "${MINISIGN_PASSWORD+set}" ]] || { echo "stub minisign: password in environment" >&2; exit 97; }'
+    echo 'for a in "$@"; do [[ "$a" != *"$pw"* ]] || { echo "stub minisign: password in argv" >&2; exit 97; }; done'
+    printf 'exec %q "$@"\n' "$(command -v minisign)"
+  } >"$WORK/stub-bin/minisign"
+  chmod +x "$WORK/stub-bin/minisign"
+  PATH="$WORK/stub-bin:$PATH" WORK_STUB_CALLED="$WORK/stub-called" \
+    MINISIGN_SECRET_KEY="$WORK/enc.key" MINISIGN_PUBLIC_KEY_FILE="$WORK/enc.pub" MINISIGN_PASSWORD="$WRONG_PW" \
     expect_reject "an encrypted minisign key with a wrong MINISIGN_PASSWORD" "MINISIGN_SECRET_KEY does not match" \
     "$PUB" "$OLD_FEED"
+  [[ -f "$WORK/stub-called" ]] || fail "the stub minisign was not called"
+  if grep -qF "stub minisign:" "$WORK/release.log"; then
+    fail "MINISIGN_PASSWORD reached minisign's environment or argv"
+  fi
+  # Proves minisign received the (wrong) password; a missing one would end in "Password: get_password()".
+  grep -qF "Wrong password for that key" "$WORK/release.log" ||
+    fail "the wrong MINISIGN_PASSWORD did not reach minisign"
   if grep -qF -- "$WRONG_PW" "$WORK/release.log"; then
     fail "the release log contains MINISIGN_PASSWORD"
   fi
-  echo "ok: the wrong MINISIGN_PASSWORD does not appear in the release log"
+  echo "ok: the wrong MINISIGN_PASSWORD reaches only minisign's stdin and not the release log"
   # The full run takes the unattended path: the encrypted key, its password from MINISIGN_PASSWORD, no terminal.
   rm -rf "$ROOT/dist"
   if ! MINISIGN_SECRET_KEY="$WORK/enc.key" MINISIGN_PUBLIC_KEY_FILE="$WORK/enc.pub" MINISIGN_PASSWORD="$ENC_PW" \
@@ -132,11 +152,11 @@ XML
     cat "$WORK/release.log" >&2
     fail "release.sh --dry-run failed"
   fi
-  tail -n 2 "$WORK/release.log"
   if grep -qF -- "$ENC_PW" "$WORK/release.log"; then
     fail "the release log contains MINISIGN_PASSWORD"
   fi
   echo "ok: MINISIGN_PASSWORD does not appear in the release log"
+  tail -n 2 "$WORK/release.log"
 
   DMG="$ROOT/dist/Skitcho-$DRY_VERSION.dmg"
   APPCAST="$ROOT/dist/appcast.xml"

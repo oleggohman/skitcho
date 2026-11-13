@@ -59,9 +59,15 @@ not a 44-character base64 key. A mismatch would make every later update fail its
    security add-generic-password -a skitcho -s skitcho-minisign -w
    ```
 
-   Add `-U` to update the item after a password change. This is done. Because `security` created the item,
-   reading it back usually shows no dialog; if macOS asks for Keychain access, choose Always Allow so later
-   releases run unattended.
+   This is done. Because `security` created the item, reading it back usually shows no dialog; if macOS asks
+   for Keychain access, choose Always Allow so later releases run unattended.
+
+   After a password change, update the item with `-U`. Keep `-w` last: a word after it is stored as the
+   password instead of prompting.
+
+   ```bash
+   security add-generic-password -U -a skitcho -s skitcho-minisign -w
+   ```
 
 Repository rules (Settings, Rules): a tag ruleset that lets only admins create, update or delete `v*` tags,
 and a `main` ruleset that requires a pull request.

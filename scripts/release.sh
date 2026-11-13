@@ -17,6 +17,11 @@
 # Secrets are only read from the environment and never printed. Do not add xtrace.
 set -euo pipefail
 
+# Keep secrets out of the environment of every child process (dirname, swift build, codesign, notarytool, ...).
+# They are passed explicitly: the Sparkle key on stdin, the notarization values as arguments.
+# MINISIGN_PASSWORD reaches only minisign, through a pipe from the printf builtin (minisign_sign).
+export -n SPARKLE_ED_PRIVATE_KEY AppleStoreAPIKey AppleIssuerID ASC_KEY_PATH MINISIGN_PASSWORD 2>/dev/null || true
+
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 
@@ -42,11 +47,6 @@ DMG="$DIST/Skitcho-$VERSION.dmg"
 GA="$ROOT/.build/artifacts/sparkle/Sparkle/bin/generate_appcast"
 PREFIX="https://github.com/oleggohman/skitcho/releases/download/v$VERSION/"
 APPCAST_URL="${APPCAST_URL:-https://github.com/oleggohman/skitcho/releases/latest/download/appcast.xml}"
-
-# Keep secrets out of the environment of every child process (swift build, codesign, notarytool, ...).
-# They are passed explicitly: the Sparkle key on stdin, the notarization values as arguments.
-# MINISIGN_PASSWORD reaches only minisign, through a pipe from the printf builtin (minisign_sign).
-export -n SPARKLE_ED_PRIVATE_KEY AppleStoreAPIKey AppleIssuerID ASC_KEY_PATH MINISIGN_PASSWORD 2>/dev/null || true
 
 WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
