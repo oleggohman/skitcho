@@ -82,7 +82,8 @@ count, so use a full clone and build exactly the commit that gets tagged.
    | `MINISIGN_SECRET_KEY` | path of the minisign secret key, `~/.minisign/skitcho.key` |
 
    `MINISIGN_PUBLIC_KEY_FILE` defaults to `minisign.pub` at the repository root; leave it unset for a real
-   release (only the dry run overrides it).
+   release (only the dry run overrides it). A real release stops in the preflight when it points anywhere
+   else.
 
    Export the Sparkle private key into a `umask 077` temporary directory outside the repository, run the
    release, and delete the export again:
@@ -108,14 +109,16 @@ count, so use a full clone and build exactly the commit that gets tagged.
    (0.1.1, then 0.1.2).
 
    minisign reads the key password from stdin, so run `scripts/release.sh` from an interactive terminal,
-   with no pipe or redirect into it. It asks twice: once in the preflight, and again at the end, after
-   notarization, which can take many minutes. Stay at the terminal.
+   with no pipe or redirect into it (the preflight stops with "stdin is not a terminal" otherwise). It asks
+   twice: once in the preflight, and again at the end, after notarization, which can take many minutes.
+   Stay at the terminal.
 
    `scripts/release.sh` then:
    - Preflight, before anything is built or sent to Apple: the Sparkle key pair matches, the
      notarization values are set, `SIGN_IDENTITY` is a valid code signing identity in the keychain
      search list (an expired certificate fails here), minisign is installed, `MINISIGN_SECRET_KEY` points
-     to a readable file, the public key file exists, and a test signature of a scratch file verifies with
+     to a readable file, the public key file is the committed `minisign.pub`, stdin is a terminal, and a
+     test signature of a scratch file verifies with
      it (first password prompt; a wrong key or password stops here with "MINISIGN_SECRET_KEY does not
      match ... (or wrong password)"), and the published appcast is fetched. HTTP 200
      merges the feed; a 404 stops the release unless `FIRST_RELEASE=1` is set; any other answer stops it

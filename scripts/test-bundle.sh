@@ -109,7 +109,7 @@ XML
   MINISIGN_SECRET_KEY="$WORK/missing.key" expect_reject "a missing minisign key file" \
     "MINISIGN_SECRET_KEY does not point to a readable file" "$PUB" "$OLD_FEED"
   MINISIGN_SECRET_KEY="$WORK/other.key" expect_reject "a minisign key not matching the public key" \
-    "does not match" "$PUB" "$OLD_FEED"
+    "MINISIGN_SECRET_KEY does not match" "$PUB" "$OLD_FEED"
   rm -rf "$ROOT/dist"
   if ! run_release "$PUB" "$OLD_FEED"; then
     cat "$WORK/release.log" >&2
@@ -284,4 +284,13 @@ hex="$(grep -rnE '#[0-9a-fA-F]{6}|Color\(hex:' Sources 2>/dev/null |
   grep -v 'lint:allow-hex' || true)"
 [[ -z "$hex" ]] || fail "hex color literals outside token files: $hex"
 
-echo "test-bundle ok ($macho Mach-O arm64, plist keys, codesign, no fonts, no stray hex)"
+# The minisign public key shown in the docs must be the committed minisign.pub (catches drift on rotation).
+MINISIGN_KEY="$(sed -n 2p "$ROOT/minisign.pub")"
+[[ "$MINISIGN_KEY" =~ ^RW[A-Za-z0-9+/]{54}$ ]] || fail "minisign.pub line 2 is not a minisign public key"
+for doc in README.md SECURITY.md docs/RELEASING.md; do
+  grep -qF -- "$MINISIGN_KEY" "$ROOT/$doc" || fail "$doc does not show the key from minisign.pub"
+  stale="$(grep -ohE 'RW[A-Za-z0-9+/]{54}' "$ROOT/$doc" | grep -vxF -- "$MINISIGN_KEY" || true)"
+  [[ -z "$stale" ]] || fail "$doc shows a minisign key other than minisign.pub: $stale"
+done
+
+echo "test-bundle ok ($macho Mach-O arm64, plist keys, codesign, no fonts, no stray hex, minisign key in docs)"

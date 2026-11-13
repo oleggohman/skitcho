@@ -122,7 +122,12 @@ Implementation notes (from plan review):
   (break after one attempt when stdin is not a tty); minisign rewrites a partial `$DMG.minisig` on retry
 - `minisign.pub` unchanged check: checksum before the dry run, compare after; tolerate the file being absent
 - preflight order: minisign checks after the Sparkle key checks, before `swift package resolve` / feed fetch
-- `expect_reject` for the mismatch matches the stable text `does not match`
+- `expect_reject` for the mismatch matches `MINISIGN_SECRET_KEY does not match` (the bare `does not match`
+  would also match the Sparkle key pair error)
+- review fixes: a real release (no `--dry-run`) also requires stdin to be a terminal (a piped password would
+  be consumed by the test signature, failing the final one after notarization) and `MINISIGN_PUBLIC_KEY_FILE`
+  to be the committed `$ROOT/minisign.pub`; `scripts/test-bundle.sh` checks that README, SECURITY and
+  RELEASING show exactly the key in `minisign.pub`
 
 ### Task 2: Commit the real public key
 
@@ -134,8 +139,8 @@ Implementation notes (from plan review):
       `! mkdir -p ~/.minisign && chmod 700 ~/.minisign && minisign -G -p minisign.pub -s ~/.minisign/skitcho.key`
 - [x] check `minisign.pub` holds only the two public lines and the secret key is outside the repo, mode 600
       (`*.key` is already in `.gitignore`); `git status` shows only `minisign.pub`
-- [x] maintainer signs a scratch file with the real key and it verifies with `minisign.pub` (pending maintainer:
-      needs the key password; orchestrator confirms)
+- [x] maintainer signs a scratch file with the real key and it verifies with `minisign.pub` (done by the
+      maintainer 2026-11-13: "Signature and comment signature verified")
 
 ### Task 3: Document signing for maintainers and users
 

@@ -6,10 +6,11 @@
 #      APPCAST_URL (published feed used for merging and the version guards; tests point it at a file:// fixture),
 #      FIRST_RELEASE=1 (required when no feed is published yet: only then is a 404 for the feed accepted),
 #      MINISIGN_SECRET_KEY (path of the minisign secret key that signs the DMG; required, also with --dry-run),
-#      MINISIGN_PUBLIC_KEY_FILE (path of the matching public key, default: minisign.pub at the repository root).
+#      MINISIGN_PUBLIC_KEY_FILE (path of the matching public key, default: minisign.pub at the repository root;
+#      only --dry-run may point it elsewhere).
 # --dry-run signs ad-hoc and skips notarization. Requires openssl@3 (ed25519) to check the Sparkle key pair
 # and minisign. minisign reads the key password from stdin (two prompts: a preflight test signature and the
-# final signature after notarization), so run a real release from an interactive terminal.
+# final signature after notarization), so a real release requires stdin to be a terminal.
 # Local only: run on the maintainer's Mac, then publish by hand with `gh release create` (see docs/RELEASING.md).
 # Secrets are only read from the environment and never printed. Do not add xtrace.
 set -euo pipefail
@@ -101,6 +102,13 @@ MINISIGN_PUBLIC_KEY_FILE="${MINISIGN_PUBLIC_KEY_FILE:-$ROOT/minisign.pub}"
 [[ -f "$MINISIGN_SECRET_KEY" && -r "$MINISIGN_SECRET_KEY" ]] ||
   fail "MINISIGN_SECRET_KEY does not point to a readable file"
 [[ -f "$MINISIGN_PUBLIC_KEY_FILE" ]] || fail "minisign public key file $MINISIGN_PUBLIC_KEY_FILE not found"
+if [[ "$DRY_RUN" == 0 ]]; then
+  # A real release verifies only against the committed key that README and SECURITY publish.
+  [[ "$MINISIGN_PUBLIC_KEY_FILE" == "$ROOT/minisign.pub" ]] ||
+    fail "MINISIGN_PUBLIC_KEY_FILE must be unset for a real release (got '$MINISIGN_PUBLIC_KEY_FILE')"
+  # A piped password would be consumed by the test signature and leave the final signature with EOF.
+  [[ -t 0 ]] || fail "stdin is not a terminal: minisign needs it for the key password"
+fi
 NONCE="$WORK/minisign-nonce"
 printf 'skitcho release %s preflight %s\n' "$VERSION" "$(date +%s)" >"$NONCE"
 echo "minisign: test signature (enter the minisign key password if asked)"
