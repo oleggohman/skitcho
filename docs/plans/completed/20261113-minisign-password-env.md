@@ -115,14 +115,14 @@ Implementation notes (from plan review, approved):
 - [x] check every name/command in the docs against the scripts; `scripts/test-workflows.sh` passes
 
 ### Task 3: Verify acceptance criteria
-- [ ] `scripts/test-bundle.sh --release-dry-run`, `scripts/test-bundle.sh`, `scripts/test-workflows.sh` pass
-- [ ] `swift build --arch arm64`, `swift test --arch arm64 --no-parallel`,
+- [x] `scripts/test-bundle.sh --release-dry-run`, `scripts/test-bundle.sh`, `scripts/test-workflows.sh` pass
+- [x] `swift build --arch arm64`, `swift test --arch arm64 --no-parallel`,
       `swift format lint --strict --recursive Sources Tests` pass (regression only)
-- [ ] no password, key contents or Keychain secret anywhere in the diff or test logs
+- [x] no password, key contents or Keychain secret anywhere in the diff or test logs
 
 ### Task 4: [Final] Update documentation
-- [ ] CLAUDE.md only if a new rule emerged
-- [ ] move this plan to `docs/plans/completed/`
+- [x] CLAUDE.md only if a new rule emerged (no new rule)
+- [x] move this plan to `docs/plans/completed/`
 
 ## Post-Completion
 - the maintainer stores the password in the Keychain once (interactive, Task 2 command): done (2026-11-13)
