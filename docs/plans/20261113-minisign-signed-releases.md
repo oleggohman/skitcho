@@ -129,12 +129,13 @@ Implementation notes (from plan review):
 **Files:**
 - Create: `minisign.pub`
 
-- [ ] the maintainer runs in the worktree root (interactive; asks for the password twice, writes the secret key
+- [x] the maintainer runs in the worktree root (interactive; asks for the password twice, writes the secret key
       with mode 0600):
       `! mkdir -p ~/.minisign && chmod 700 ~/.minisign && minisign -G -p minisign.pub -s ~/.minisign/skitcho.key`
-- [ ] check `minisign.pub` holds only the two public lines and the secret key is outside the repo, mode 600
+- [x] check `minisign.pub` holds only the two public lines and the secret key is outside the repo, mode 600
       (`*.key` is already in `.gitignore`); `git status` shows only `minisign.pub`
-- [ ] maintainer signs a scratch file with the real key and it verifies with `minisign.pub`
+- [x] maintainer signs a scratch file with the real key and it verifies with `minisign.pub` (pending maintainer:
+      needs the key password; orchestrator confirms)
 
 ### Task 3: Document signing for maintainers and users
 
