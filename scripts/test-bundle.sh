@@ -32,8 +32,22 @@ if [[ "${1:-}" == "--release-dry-run" ]]; then
   "$OPENSSL" genpkey -algorithm ed25519 -out "$WORK/other.pem" 2>/dev/null
   OTHER_PUB="$("$OPENSSL" pkey -in "$WORK/other.pem" -pubout -outform DER | tail -c 32 | base64)"
 
+  # Throwaway unencrypted minisign pairs (-W: no password, so nothing can block on a prompt). Explicit paths
+  # keep them away from the committed minisign.pub and from ~/.minisign.
+  command -v minisign >/dev/null 2>&1 || fail "minisign not found (brew install minisign)"
+  minisign -G -W -p "$WORK/good.pub" -s "$WORK/good.key" </dev/null >/dev/null ||
+    fail "minisign cannot generate a key pair"
+  minisign -G -W -p "$WORK/other.pub" -s "$WORK/other.key" </dev/null >/dev/null ||
+    fail "minisign cannot generate a key pair"
+  # The dry run must never touch the committed public key.
+  pub_sum() {
+    if [[ -f "$ROOT/minisign.pub" ]]; then shasum -a 256 "$ROOT/minisign.pub"; else echo absent; fi
+  }
+  PUB_SUM_BEFORE="$(pub_sum)"
+
   DRY_VERSION="9.9.9"
-  unset FIRST_RELEASE # only the cases below set it
+  # Only the cases below set these; a maintainer's real values must never reach the dry run.
+  unset FIRST_RELEASE MINISIGN_SECRET_KEY MINISIGN_PUBLIC_KEY_FILE
   # Hermetic feed: a fixture stands in for the published appcast (never the production URL).
   fixture() { # $1 = sparkle:version, $2 = shortVersionString; prints a file:// URL
     cat >"$WORK/appcast-$1-$2.xml" <<XML
@@ -54,11 +68,14 @@ if [[ "${1:-}" == "--release-dry-run" ]]; then
 XML
     echo "file://$WORK/appcast-$1-$2.xml"
   }
-  # $1 = public key, $2 = appcast URL; output goes to $WORK/release.log. Env prefixes on the call (FIRST_RELEASE)
-  # reach release.sh.
+  # $1 = public key, $2 = appcast URL; output goes to $WORK/release.log. Env prefixes on the call (FIRST_RELEASE,
+  # MINISIGN_SECRET_KEY, MINISIGN_PUBLIC_KEY_FILE) reach release.sh; the minisign ones default to the good pair
+  # (an empty MINISIGN_SECRET_KEY stays empty). stdin is /dev/null so a password prompt can never block.
   run_release() {
     SPARKLE_ED_PRIVATE_KEY="$(cat "$WORK/seed")" SPARKLE_PUBLIC_ED_KEY="$1" SIGN_IDENTITY="" APPCAST_URL="$2" \
-      "$ROOT/scripts/release.sh" "$DRY_VERSION" --dry-run >"$WORK/release.log" 2>&1
+      MINISIGN_SECRET_KEY="${MINISIGN_SECRET_KEY-$WORK/good.key}" \
+      MINISIGN_PUBLIC_KEY_FILE="${MINISIGN_PUBLIC_KEY_FILE-$WORK/good.pub}" \
+      "$ROOT/scripts/release.sh" "$DRY_VERSION" --dry-run </dev/null >"$WORK/release.log" 2>&1
   }
   expect_reject() { # $1 = label, $2 = expected error text, rest = run_release args
     local label="$1" want="$2"
@@ -87,6 +104,12 @@ XML
     "$PUB" "$OLD_FEED"
   FIRST_RELEASE=yes expect_reject "a FIRST_RELEASE other than 1" "FIRST_RELEASE must be unset or 1" \
     "$PUB" "$OLD_FEED"
+  MINISIGN_SECRET_KEY="" expect_reject "an unset MINISIGN_SECRET_KEY" "MINISIGN_SECRET_KEY is not set" \
+    "$PUB" "$OLD_FEED"
+  MINISIGN_SECRET_KEY="$WORK/missing.key" expect_reject "a missing minisign key file" \
+    "MINISIGN_SECRET_KEY does not point to a readable file" "$PUB" "$OLD_FEED"
+  MINISIGN_SECRET_KEY="$WORK/other.key" expect_reject "a minisign key not matching the public key" \
+    "does not match" "$PUB" "$OLD_FEED"
   rm -rf "$ROOT/dist"
   if ! run_release "$PUB" "$OLD_FEED"; then
     cat "$WORK/release.log" >&2
@@ -98,8 +121,27 @@ XML
   APPCAST="$ROOT/dist/appcast.xml"
   [[ -f "$DMG" ]] || fail "missing $DMG"
   [[ -f "$APPCAST" ]] || fail "missing appcast.xml"
-  extra="$(find "$ROOT/dist" -mindepth 1 ! -name "Skitcho-$DRY_VERSION.dmg" ! -name appcast.xml -print)"
+  MINISIG="$DMG.minisig"
+  [[ -f "$MINISIG" ]] || fail "missing $MINISIG"
+  extra="$(find "$ROOT/dist" -mindepth 1 ! -name "Skitcho-$DRY_VERSION.dmg" ! -name "Skitcho-$DRY_VERSION.dmg.minisig" \
+    ! -name appcast.xml -print)"
   [[ -z "$extra" ]] || fail "unexpected files in dist: $extra"
+
+  # The minisign signature verifies with the dry-run public key, carries the trusted comment, and fails with
+  # any other key.
+  minisign -V -q -p "$WORK/good.pub" -m "$DMG" -x "$MINISIG" </dev/null || fail "minisign -V rejected the DMG"
+  echo "ok: minisign -V accepts the DMG signature"
+  comment="$(minisign -V -Q -p "$WORK/good.pub" -m "$DMG" -x "$MINISIG" </dev/null)" ||
+    fail "minisign -V -Q failed"
+  [[ "$comment" == "Skitcho $DRY_VERSION Skitcho-$DRY_VERSION.dmg" ]] ||
+    fail "minisign trusted comment '$comment', expected 'Skitcho $DRY_VERSION Skitcho-$DRY_VERSION.dmg'"
+  echo "ok: minisign trusted comment '$comment'"
+  if minisign -V -q -p "$WORK/other.pub" -m "$DMG" -x "$MINISIG" </dev/null 2>/dev/null; then
+    fail "minisign -V accepted the DMG signature with another public key"
+  fi
+  echo "ok: minisign -V rejects another public key"
+  [[ "$(pub_sum)" == "$PUB_SUM_BEFORE" ]] || fail "the dry run changed the committed minisign.pub"
+  echo "ok: committed minisign.pub unchanged"
   dmg_info="$(hdiutil imageinfo "$DMG" 2>/dev/null)" || fail "dmg: hdiutil imageinfo failed"
   grep -q 'Format: UDZO' <<<"$dmg_info" || fail "dmg: not a UDZO image"
   echo "ok: dmg is UDZO"
@@ -152,9 +194,10 @@ XML
   "$SU" --verify --ed-key-file "$WORK/seed" "$DMG" "$SIG" || fail "sign_update --verify rejected the appcast signature"
   echo "ok: sign_update --verify accepts the DMG signature"
 
-  rm -f "$WORK/key.pem" "$WORK/other.pem" "$WORK/seed"
+  rm -f "$WORK/key.pem" "$WORK/other.pem" "$WORK/seed" "$WORK/good.key" "$WORK/other.key"
   rm -rf "$ROOT/dist"
-  echo "release dry-run ok (UDZO dmg: Skitcho.app + Applications link, arm64-only, appcast url + edSignature)"
+  echo "release dry-run ok (UDZO dmg: Skitcho.app + Applications link, arm64-only, appcast url + edSignature," \
+    "minisign signature)"
   exit 0
 fi
 

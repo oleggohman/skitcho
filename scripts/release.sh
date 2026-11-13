@@ -4,8 +4,12 @@
 # Env: SIGN_IDENTITY, SPARKLE_PUBLIC_ED_KEY (read by bundle.sh), SPARKLE_ED_PRIVATE_KEY (appcast signing),
 #      ASC_KEY_PATH, AppleStoreAPIKey, AppleIssuerID (notarization, skipped with --dry-run),
 #      APPCAST_URL (published feed used for merging and the version guards; tests point it at a file:// fixture),
-#      FIRST_RELEASE=1 (required when no feed is published yet: only then is a 404 for the feed accepted).
-# --dry-run signs ad-hoc and skips notarization. Requires openssl@3 (ed25519) to check the Sparkle key pair.
+#      FIRST_RELEASE=1 (required when no feed is published yet: only then is a 404 for the feed accepted),
+#      MINISIGN_SECRET_KEY (path of the minisign secret key that signs the DMG; required, also with --dry-run),
+#      MINISIGN_PUBLIC_KEY_FILE (path of the matching public key, default: minisign.pub at the repository root).
+# --dry-run signs ad-hoc and skips notarization. Requires openssl@3 (ed25519) to check the Sparkle key pair
+# and minisign. minisign reads the key password from stdin (two prompts: a preflight test signature and the
+# final signature after notarization), so run a real release from an interactive terminal.
 # Local only: run on the maintainer's Mac, then publish by hand with `gh release create` (see docs/RELEASING.md).
 # Secrets are only read from the environment and never printed. Do not add xtrace.
 set -euo pipefail
@@ -87,6 +91,24 @@ if [[ "$DRY_RUN" == 0 ]]; then
 else
   SIGN_IDENTITY="" # dry-run is always ad-hoc signed
 fi
+
+# minisign: the secret key's id is encrypted, so a test signature verified with the public key is the only way
+# to catch a wrong key or password before building and notarizing. stdin stays attached for the password.
+command -v minisign >/dev/null 2>&1 || fail "minisign not found (brew install minisign)"
+MINISIGN_SECRET_KEY="${MINISIGN_SECRET_KEY:-}"
+MINISIGN_PUBLIC_KEY_FILE="${MINISIGN_PUBLIC_KEY_FILE:-$ROOT/minisign.pub}"
+[[ -n "$MINISIGN_SECRET_KEY" ]] || fail "MINISIGN_SECRET_KEY is not set"
+[[ -f "$MINISIGN_SECRET_KEY" && -r "$MINISIGN_SECRET_KEY" ]] ||
+  fail "MINISIGN_SECRET_KEY does not point to a readable file"
+[[ -f "$MINISIGN_PUBLIC_KEY_FILE" ]] || fail "minisign public key file $MINISIGN_PUBLIC_KEY_FILE not found"
+NONCE="$WORK/minisign-nonce"
+printf 'skitcho release %s preflight %s\n' "$VERSION" "$(date +%s)" >"$NONCE"
+echo "minisign: test signature (enter the minisign key password if asked)"
+if ! minisign -S -s "$MINISIGN_SECRET_KEY" -m "$NONCE" -x "$NONCE.minisig" ||
+  ! minisign -V -q -p "$MINISIGN_PUBLIC_KEY_FILE" -m "$NONCE" -x "$NONCE.minisig"; then
+  fail "MINISIGN_SECRET_KEY does not match $MINISIGN_PUBLIC_KEY_FILE (or wrong password)"
+fi
+rm -f "$NONCE" "$NONCE.minisig"
 
 if [[ ! -x "$GA" ]]; then
   swift package resolve >/dev/null
@@ -202,4 +224,37 @@ fi
 printf '%s' "$SPARKLE_ED_PRIVATE_KEY" | "$GA" --ed-key-file - --maximum-versions 0 \
   --download-url-prefix "$PREFIX" "$DIST"
 
-echo "release ok: $DMG (version $VERSION build $BUILD_NUMBER, dry-run=$DRY_RUN)"
+# ---------------------------------------------------------------------------------------------------
+# minisign signature of the final DMG (stapled and in the appcast), published next to it as a release asset.
+# stdin stays attached for the password prompt; up to 3 attempts on a terminal, one otherwise.
+# ---------------------------------------------------------------------------------------------------
+MINISIG="$DMG.minisig"
+TRUSTED_COMMENT="Skitcho $VERSION Skitcho-$VERSION.dmg"
+attempts=1
+if [[ -t 0 ]]; then
+  attempts=3
+fi
+signed=0
+for ((i = 1; i <= attempts; i++)); do
+  echo "minisign: signing $(basename "$DMG") (attempt $i of $attempts)"
+  if minisign -S -s "$MINISIGN_SECRET_KEY" -m "$DMG" -x "$MINISIG" -t "$TRUSTED_COMMENT"; then
+    signed=1
+    break
+  fi
+done
+if [[ "$signed" == 1 ]] && ! minisign -V -q -p "$MINISIGN_PUBLIC_KEY_FILE" -m "$DMG" -x "$MINISIG"; then
+  signed=0
+fi
+if [[ "$signed" != 1 ]]; then
+  rm -f "$MINISIG"
+  {
+    echo "error: minisign signing of $DMG failed."
+    echo "dist/ already holds the final DMG and appcast.xml. Do NOT re-run release.sh for $VERSION (it would"
+    echo "rebuild and re-notarize a different DMG). Sign by hand, then publish:"
+    echo "  minisign -S -s \"$MINISIGN_SECRET_KEY\" -m \"$DMG\" -x \"$MINISIG\" -t \"$TRUSTED_COMMENT\""
+    echo "  minisign -V -p \"$MINISIGN_PUBLIC_KEY_FILE\" -m \"$DMG\" -x \"$MINISIG\""
+  } >&2
+  exit 1
+fi
+
+echo "release ok: $DMG + $(basename "$MINISIG") (version $VERSION build $BUILD_NUMBER, dry-run=$DRY_RUN)"
