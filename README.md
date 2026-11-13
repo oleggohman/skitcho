@@ -53,6 +53,17 @@ It is a native SwiftUI/AppKit app, built for Apple silicon only (arm64).
 2. Open the disk image and drag `Skitcho.app` onto the `Applications` folder.
 3. Open it. To make Skitcho the editor for an image, use Finder's **Open With ▸ Skitcho**.
 
+Optional: from 0.1.2 on, each release also has a minisign signature, `Skitcho-<version>.dmg.minisig`.
+Download it next to the DMG and verify the download before step 2 (`brew install minisign`; replace X.Y.Z
+with the version):
+
+```bash
+minisign -Vm Skitcho-X.Y.Z.dmg -P RWT4rkcOBh0Egd4d1Nc/WaPdz5wNdMeFOQ5hV/PdEo0qSVAblgc5qBim
+```
+
+It should print `Signature and comment signature verified`. v0.1.1 has no signature. See
+[SECURITY.md](SECURITY.md) for the key.
+
 Requirements: macOS 15 or later on Apple silicon. Intel Macs are not supported.
 
 Release builds are signed with a Developer ID and notarized by Apple, so Gatekeeper opens them normally.

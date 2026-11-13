@@ -15,6 +15,22 @@ Describe the problem, the affected version and steps to reproduce. Only the late
   matching public key (`SUPublicEDKey`) and refuses updates that do not verify.
 - Release builds are signed with a Developer ID Application certificate and are notarized and stapled by
   Apple before publication.
+- From 0.1.2 on, every release DMG also carries a minisign signature, published as the release asset
+  `Skitcho-X.Y.Z.dmg.minisig`. The public key (key id `81041D060E47AEF8`, also committed as
+  [`minisign.pub`](minisign.pub)) is:
+
+  ```
+  RWT4rkcOBh0Egd4d1Nc/WaPdz5wNdMeFOQ5hV/PdEo0qSVAblgc5qBim
+  ```
+
+  Download the DMG and its `.minisig` into the same directory and verify with minisign 0.8 or later
+  (`brew install minisign`):
+
+  ```bash
+  minisign -Vm Skitcho-X.Y.Z.dmg -P RWT4rkcOBh0Egd4d1Nc/WaPdz5wNdMeFOQ5hV/PdEo0qSVAblgc5qBim
+  ```
+
+  v0.1.1 has no signature: it was published before signing started, and its release is immutable.
 - Builds are arm64-only.
 
 Details for maintainers are in [docs/RELEASING.md](docs/RELEASING.md).

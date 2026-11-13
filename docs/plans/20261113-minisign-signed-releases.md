@@ -144,19 +144,19 @@ Implementation notes (from plan review):
 - Modify: `SECURITY.md`
 - Modify: `README.md`
 
-- [ ] RELEASING.md one-time setup step 4: install minisign, generate the key (exact command from Task 2),
+- [x] RELEASING.md one-time setup step 4: install minisign, generate the key (exact command from Task 2),
       back up the secret key privately, `minisign.pub` is committed
-- [ ] RELEASING.md step 3: env table gains `MINISIGN_SECRET_KEY`; bullets for the preflight test signature and
+- [x] RELEASING.md step 3: env table gains `MINISIGN_SECRET_KEY`; bullets for the preflight test signature and
       the final signature; the two password prompts (stdin, interactive terminal, second one after
       notarization — stay at the terminal); "Writes ..." bullet lists the `.minisig`; recovery when the final
       signature fails (manual sign of `dist/`, never re-run for the same version)
-- [ ] RELEASING.md step 5 and the first-release block: `gh release create` includes
+- [x] RELEASING.md step 5 and the first-release block: `gh release create` includes
       `dist/Skitcho-X.Y.Z.dmg.minisig`; note that immutable releases forbid adding assets later
-- [ ] RELEASING.md "Verifying a release" adds the minisign check; "Local dry run" mentions the throwaway
+- [x] RELEASING.md "Verifying a release" adds the minisign check; "Local dry run" mentions the throwaway
       minisign keys, the `.minisig` checks, and that minisign is required
-- [ ] SECURITY.md "Update signing model": release DMGs from 0.1.2 on carry a minisign signature; public key
+- [x] SECURITY.md "Update signing model": release DMGs from 0.1.2 on carry a minisign signature; public key
       string and verify command; README "Install": optional verification step with the same command
-- [ ] check every command in the docs against the scripts (env names, paths, file names)
+- [x] check every command in the docs against the scripts (env names, paths, file names)
 
 ### Task 4: Verify acceptance criteria
 - [ ] `scripts/test-bundle.sh --release-dry-run` passes (shows the `.minisig` checks)

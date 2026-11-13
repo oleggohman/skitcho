@@ -4,8 +4,10 @@ Skitcho is built, signed, notarized and released only on the maintainer's Mac. T
 release automation: GitHub only runs the Linux security scans (CodeQL on the workflow files, Trivy,
 dependency review, Scorecard). Every release, including the first, follows the local procedure below and
 ends with a manual `gh release create`. Each release ships `Skitcho-X.Y.Z.dmg` (a compressed disk image
-with `Skitcho.app` and an `Applications` link for drag-to-install) and `appcast.xml`. No secret value ever
-belongs in the repository, and none belongs in GitHub.
+with `Skitcho.app` and an `Applications` link for drag-to-install), its minisign signature
+`Skitcho-X.Y.Z.dmg.minisig` and `appcast.xml`. Signatures start with 0.1.2: v0.1.1 was published before
+and has none, and its release is immutable, so none can be added. No secret value ever belongs in the
+repository, and none belongs in GitHub.
 
 The former `release` GitHub environment and its secrets are no longer used by anything. They can be
 deleted from the repository settings.
@@ -34,6 +36,22 @@ deleted from the repository settings.
 and refuses to build when it does not match `SPARKLE_PUBLIC_ED_KEY`, or when the variable is empty or
 not a 44-character base64 key. A mismatch would make every later update fail its signature check.
 
+4. **minisign release signing key.** Every release DMG also gets a minisign signature, so users can check a
+   download against a key published in the repository, independently of GitHub and Apple. The secret key
+   is password-protected and lives outside the repository at `~/.minisign/skitcho.key`; the public key is
+   committed as `minisign.pub` (key id `81041D060E47AEF8`) and printed in [SECURITY.md](../SECURITY.md)
+   and the README. Create the pair once, in the repository root (minisign asks for the password twice):
+
+   ```bash
+   brew install minisign
+   mkdir -p ~/.minisign && chmod 700 ~/.minisign
+   minisign -G -p minisign.pub -s ~/.minisign/skitcho.key
+   ```
+
+   This is done; do not run it again. Keep a backup of `~/.minisign/skitcho.key` and its password somewhere
+   private, with owner-only permissions. If the key is lost, generate a new pair, commit the new
+   `minisign.pub` and update the key string in SECURITY.md and README.md.
+
 Repository rules (Settings, Rules): a tag ruleset that lets only admins create, update or delete `v*` tags,
 and a `main` ruleset that requires a pull request.
 
@@ -61,6 +79,10 @@ count, so use a full clone and build exactly the commit that gets tagged.
    | `AppleStoreAPIKey`, `AppleIssuerID` | App Store Connect key ID and issuer ID |
    | `SPARKLE_PUBLIC_ED_KEY` | the public key printed by `generate_keys` |
    | `SPARKLE_ED_PRIVATE_KEY` | the private key, read from a private temporary export |
+   | `MINISIGN_SECRET_KEY` | path of the minisign secret key, `~/.minisign/skitcho.key` |
+
+   `MINISIGN_PUBLIC_KEY_FILE` defaults to `minisign.pub` at the repository root; leave it unset for a real
+   release (only the dry run overrides it).
 
    Export the Sparkle private key into a `umask 077` temporary directory outside the repository, run the
    release, and delete the export again:
@@ -75,6 +97,7 @@ count, so use a full clone and build exactly the commit that gets tagged.
      export SIGN_IDENTITY="Developer ID Application: Your Name (TEAMID)"
      export ASC_KEY_PATH="/path/to/AuthKey_XXXX.p8"
      export AppleStoreAPIKey="..." AppleIssuerID="..." SPARKLE_PUBLIC_ED_KEY="..."
+     export MINISIGN_SECRET_KEY="$HOME/.minisign/skitcho.key"
      scripts/release.sh X.Y.Z
    )
    ```
@@ -84,10 +107,17 @@ count, so use a full clone and build exactly the commit that gets tagged.
    (see [The first release](#the-first-release)). Bug-fix releases bump the patch version by 0.0.1
    (0.1.1, then 0.1.2).
 
+   minisign reads the key password from stdin, so run `scripts/release.sh` from an interactive terminal,
+   with no pipe or redirect into it. It asks twice: once in the preflight, and again at the end, after
+   notarization, which can take many minutes. Stay at the terminal.
+
    `scripts/release.sh` then:
    - Preflight, before anything is built or sent to Apple: the Sparkle key pair matches, the
      notarization values are set, `SIGN_IDENTITY` is a valid code signing identity in the keychain
-     search list (an expired certificate fails here), and the published appcast is fetched. HTTP 200
+     search list (an expired certificate fails here), minisign is installed, `MINISIGN_SECRET_KEY` points
+     to a readable file, the public key file exists, and a test signature of a scratch file verifies with
+     it (first password prompt; a wrong key or password stops here with "MINISIGN_SECRET_KEY does not
+     match ... (or wrong password)"), and the published appcast is fetched. HTTP 200
      merges the feed; a 404 stops the release unless `FIRST_RELEASE=1` is set; any other answer stops it
      too. The build number and `X.Y.Z` must both be greater than every published item. The notarization
      credentials themselves are only checked by `notarytool`, after the build.
@@ -96,10 +126,23 @@ count, so use a full clone and build exactly the commit that gets tagged.
      (45 minute limit; the notary log is printed on failure), staples and validates the ticket
      and checks it with `spctl`.
    - Signs the DMG into `appcast.xml`, merged with the previous feed.
-   - Writes `dist/Skitcho-X.Y.Z.dmg` and `dist/appcast.xml`. It un-exports the secrets, so the build tools
+   - Signs the final DMG with minisign into `Skitcho-X.Y.Z.dmg.minisig`, trusted comment
+     `Skitcho X.Y.Z Skitcho-X.Y.Z.dmg`, and verifies it with the public key (second password prompt; up
+     to 3 attempts on a terminal).
+   - Writes `dist/Skitcho-X.Y.Z.dmg`, `dist/Skitcho-X.Y.Z.dmg.minisig` and `dist/appcast.xml`. It un-exports the secrets, so the build tools
      never see them: the Sparkle key reaches `generate_appcast` on stdin and the notarization values reach
      `notarytool` as arguments. A non-dry-run release refuses to start without `SIGN_IDENTITY` (it never
      falls back to ad-hoc signing).
+
+   If the final minisign signature fails, `release.sh` stops with an error, but `dist/` already holds the
+   final, notarized DMG and `appcast.xml`. Never re-run `release.sh` for the same version: it would rebuild
+   and re-notarize a different DMG. Sign by hand with the commands it prints, then continue with step 4:
+
+   ```bash
+   minisign -S -s ~/.minisign/skitcho.key -m dist/Skitcho-X.Y.Z.dmg -x dist/Skitcho-X.Y.Z.dmg.minisig \
+     -t "Skitcho X.Y.Z Skitcho-X.Y.Z.dmg"
+   minisign -V -p minisign.pub -m dist/Skitcho-X.Y.Z.dmg -x dist/Skitcho-X.Y.Z.dmg.minisig
+   ```
 
 4. Only after step 3 succeeded, tag the same commit and push the tag (only admins may, see the tag
    ruleset):
@@ -109,12 +152,15 @@ count, so use a full clone and build exactly the commit that gets tagged.
    git push origin vX.Y.Z
    ```
 
-5. Publish the release with both assets, marked as latest:
+5. Publish the release with all three assets, marked as latest:
 
    ```bash
-   gh release create vX.Y.Z dist/Skitcho-X.Y.Z.dmg dist/appcast.xml \
+   gh release create vX.Y.Z dist/Skitcho-X.Y.Z.dmg dist/Skitcho-X.Y.Z.dmg.minisig dist/appcast.xml \
      --repo oleggohman/skitcho --verify-tag --latest --title "Skitcho X.Y.Z" --generate-notes
    ```
+
+   Pass every asset in this one command: releases are immutable, so no asset can be added after the
+   release is published.
 
    Installed apps read the feed from
    `https://github.com/oleggohman/skitcho/releases/latest/download/appcast.xml`.
@@ -144,13 +190,25 @@ For the first release, steps 3 to 5 read:
 FIRST_RELEASE=1 scripts/release.sh 0.1.1   # inside the subshell of step 3; writes dist/Skitcho-0.1.1.dmg
 git tag v0.1.1
 git push origin v0.1.1
-gh release create v0.1.1 dist/Skitcho-0.1.1.dmg dist/appcast.xml \
+gh release create v0.1.1 dist/Skitcho-0.1.1.dmg dist/Skitcho-0.1.1.dmg.minisig dist/appcast.xml \
   --repo oleggohman/skitcho --verify-tag --latest --title "Skitcho 0.1.1" --generate-notes
 ```
 
+The published v0.1.1 predates minisign signing and has no `.minisig`; the block shows the commands as the
+current `release.sh` runs them.
+
 ## Verifying a release
 
-Download the DMG from the release page and check Gatekeeper:
+Download the DMG and its `.minisig` from the release page into the same directory and check the minisign
+signature (0.1.2 and later; minisign 0.8 or later):
+
+```bash
+minisign -Vm Skitcho-X.Y.Z.dmg -P RWT4rkcOBh0Egd4d1Nc/WaPdz5wNdMeFOQ5hV/PdEo0qSVAblgc5qBim
+# expected: Signature and comment signature verified
+#           Trusted comment: Skitcho X.Y.Z Skitcho-X.Y.Z.dmg
+```
+
+Then check Gatekeeper:
 
 ```bash
 spctl -a -t open --context context:primary-signature -vv Skitcho-X.Y.Z.dmg
@@ -166,6 +224,11 @@ Then launch an older build and use Skitcho, Check for Updates to confirm the upd
 ## Local dry run
 
 `scripts/test-bundle.sh --release-dry-run` exercises `scripts/release.sh --dry-run` with a throwaway
-key, a fixture appcast instead of the published feed, ad-hoc signing and no notarization. It checks
-that the preflight rejects a bad key pair, stale versions and a misused `FIRST_RELEASE`, mounts the DMG
-read-only and asserts its contents, and verifies the appcast signature. It never touches your Keychain.
+Sparkle key, throwaway unencrypted minisign key pairs, a fixture appcast instead of the published feed,
+ad-hoc signing and no notarization. It needs minisign (`brew install minisign`). It checks that the
+preflight rejects a bad Sparkle key pair, stale versions, a misused `FIRST_RELEASE`, an unset
+`MINISIGN_SECRET_KEY`, a missing minisign key file and a minisign key that does not match the public key,
+mounts the DMG read-only and asserts its contents, and verifies the appcast signature. It verifies
+`dist/Skitcho-9.9.9.dmg.minisig` with the throwaway public key, checks its trusted comment, and checks that
+another public key rejects it. It never touches your Keychain, `~/.minisign` or the committed
+`minisign.pub` (it asserts the file is unchanged), and never waits for a password.
