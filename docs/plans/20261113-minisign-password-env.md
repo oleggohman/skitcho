@@ -99,20 +99,20 @@ Implementation notes (from plan review, approved):
 **Files:**
 - Modify: `docs/RELEASING.md`
 
-- [ ] one-time setup step 4: store the minisign password in the login Keychain
+- [x] one-time setup step 4: store the minisign password in the login Keychain
       (`security add-generic-password -a skitcho -s skitcho-minisign -w`; add `-U` to update it after a password
       change); "if macOS asks for Keychain access, choose Always Allow" (usually no dialog: `security` created
       the item)
-- [ ] step 3 subshell: set the password LAST, right before `scripts/release.sh`, so earlier commands do not
+- [x] step 3 subshell: set the password LAST, right before `scripts/release.sh`, so earlier commands do not
       inherit it, and fail on a missing item:
       `MINISIGN_PASSWORD="$(security find-generic-password -a skitcho -s skitcho-minisign -w)" || exit 1;
       export MINISIGN_PASSWORD`
-- [ ] step 3: env table gains `MINISIGN_PASSWORD`; the subshell example exports it from the Keychain; the
+- [x] step 3: env table gains `MINISIGN_PASSWORD`; the subshell example exports it from the Keychain; the
       two-prompt paragraph says prompts happen only when `MINISIGN_PASSWORD` is unset; preflight bullet and
       "stdin is not a terminal" text updated; final-signature bullet notes one attempt with the variable
-- [ ] "Local dry run" mentions the encrypted throwaway key, the wrong-password reject case and the
+- [x] "Local dry run" mentions the encrypted throwaway key, the wrong-password reject case and the
       no-leak assertion
-- [ ] check every name/command in the docs against the scripts; `scripts/test-workflows.sh` passes
+- [x] check every name/command in the docs against the scripts; `scripts/test-workflows.sh` passes
 
 ### Task 3: Verify acceptance criteria
 - [ ] `scripts/test-bundle.sh --release-dry-run`, `scripts/test-bundle.sh`, `scripts/test-workflows.sh` pass
