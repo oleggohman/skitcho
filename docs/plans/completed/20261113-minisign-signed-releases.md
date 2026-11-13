@@ -164,16 +164,16 @@ Implementation notes (from plan review):
 - [x] check every command in the docs against the scripts (env names, paths, file names)
 
 ### Task 4: Verify acceptance criteria
-- [ ] `scripts/test-bundle.sh --release-dry-run` passes (shows the `.minisig` checks)
-- [ ] `scripts/test-bundle.sh`, `scripts/test-workflows.sh` pass
-- [ ] `swift build --arch arm64`, `swift test --arch arm64 --no-parallel`,
+- [x] `scripts/test-bundle.sh --release-dry-run` passes (shows the `.minisig` checks)
+- [x] `scripts/test-bundle.sh`, `scripts/test-workflows.sh` pass
+- [x] `swift build --arch arm64`, `swift test --arch arm64 --no-parallel`,
       `swift format lint --strict --recursive Sources Tests` pass (no Swift change expected; regression only)
-- [ ] `shellcheck scripts/release.sh scripts/test-bundle.sh` if shellcheck is installed
-- [ ] no secret key or key contents anywhere in the diff
+- [x] `shellcheck scripts/release.sh scripts/test-bundle.sh` if shellcheck is installed (skipped: shellcheck not installed)
+- [x] no secret key or key contents anywhere in the diff
 
 ### Task 5: [Final] Update documentation
-- [ ] update CLAUDE.md only if a new rule emerged (e.g. minisign required for the release dry run)
-- [ ] move this plan to `docs/plans/completed/`
+- [x] update CLAUDE.md only if a new rule emerged (e.g. minisign required for the release dry run)
+- [x] move this plan to `docs/plans/completed/`
 
 ## Post-Completion
 *Items requiring manual intervention or external systems*

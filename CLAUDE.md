@@ -10,7 +10,7 @@ swift build --arch arm64
 swift test --arch arm64 --no-parallel      # serial only, one test command at a time
 swift format lint --strict --recursive Sources Tests
 scripts/bundle.sh                          # -> build/Skitcho.app
-scripts/test-bundle.sh                     # also: --release-dry-run
+scripts/test-bundle.sh                     # also: --release-dry-run (needs minisign: brew install minisign)
 scripts/test-workflows.sh
 ```
 
